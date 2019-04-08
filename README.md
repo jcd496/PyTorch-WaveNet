@@ -1,6 +1,7 @@
 # ParallelWaveNet
 
 Parallel implementation of DeepMind's WaveNet utilizing PyTorch
+by: Jacqueline Abalo and John Donaghy
 
 instructions to setup
 
