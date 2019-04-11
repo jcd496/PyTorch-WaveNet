@@ -19,3 +19,6 @@ conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
 
 to launch training from log-0 node (don't launch while in interactive session)
 sbatch launch_multinode.s
+
+Data Processed with preprocessing script from ksw0306 FloWaveNet.
+Data Location on prince: /scratch/jcd496/LJdata/processed
