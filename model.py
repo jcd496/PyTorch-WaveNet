@@ -49,9 +49,9 @@ class WaveNet(nn.Module):
         return residual_out
 
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
     #just to test
-    model = WaveNet(2, 3, 1, 1, 1)
+#    model = WaveNet(2, 3, 1, 1, 1)
     #is this the form of input data???
-    inputs = torch.ones([1,1,6])
-    print(model(inputs))
+#    inputs = torch.ones([1,1,6])
+#    print(model(inputs))
