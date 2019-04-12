@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from data import one_hot_encode
 class WaveNet(nn.Module):
     #construct blocks of residual layers. each layer's dilation increases by factor of 2. each layer performs
     #2x1 convolution, separately applies filter and gate, hadamard product results,
@@ -47,8 +48,13 @@ class WaveNet(nn.Module):
         residual_out = inputs
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        softmax_out = self.softmax(residual_out)
-        return softmax_out
+        residual_out = residual_out.int()
+        residual_out = one_hot_encode(residual_out)
+        print(residual_out.shape)
+        #for  in residual_out[][][]:
+        #    softmax_out = self.softmax(residual_out)
+        #print(softmax_out.shape)
+        return residual_out
 
 
 #if __name__ == '__main__':

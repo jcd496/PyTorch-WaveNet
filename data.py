@@ -48,6 +48,11 @@ class LJDataset(Dataset):
 def _pad_2d(x, max_len, b_pad=0):
     x = np.pad(x, [(b_pad, max_len - len(x) - b_pad), (0,0)], mode="constant", constant_values=0)
     return x
+
+def one_hot_encode(targets, num_classes=256):
+    #takes targets as numpy array
+    one_hots = np.eye(num_classes)[targets]
+    return one_hots
 def collate_fn(batch):
 
     local_conditioning = len(batch[0]) >= 2
@@ -89,5 +94,4 @@ def collate_fn(batch):
     MuTransform = transforms.Compose([ transforms.MuLawEncoding() ])
     x_batch_MuLaw = MuTransform(x_batch)
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()
-    print(x_batch[0])
     return x_batch, c_batch
