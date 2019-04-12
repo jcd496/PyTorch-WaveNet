@@ -7,7 +7,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-
+from transforms import MuLawEncoding
 max_time_steps = 16000
 hop_length = 256
 
@@ -86,5 +86,7 @@ def collate_fn(batch):
         del max_len
     else:
         c_batch = None
+    x_batch = MuLawEncoding(x_batch)
+    print(x_batch_MuLaw.shape)
     x_batch = torch.tensor(x_batch).transpose(1,2).contiguous()
     return x_batch, c_batch
