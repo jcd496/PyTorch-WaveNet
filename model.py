@@ -25,6 +25,7 @@ class WaveNet(nn.Module):
             blocks.append(nn.ModuleDict({'dilated':nn.ModuleList(residual_layers_dilated), 'undilated':nn.ModuleList(residual_layers_undilated)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
+        self.softmax = nn.Softmax()
     #helper method for feed forward. describes computation of all residual layers within block    
     @staticmethod
     def residual_layer(inputs, block, residual_layers):
@@ -46,7 +47,8 @@ class WaveNet(nn.Module):
         residual_out = inputs
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        return residual_out
+        softmax_out = self.softmax(residual_out)
+        return softmax_out
 
 
 #if __name__ == '__main__':
