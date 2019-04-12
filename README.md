@@ -4,11 +4,9 @@ Parallel implementation of DeepMind's WaveNet utilizing PyTorch
 
 by: Jacqueline Abalo and John Donaghy
 
-instructions to setup
+Dependencies:
 
-module load anaconda3/5.3.1
-
-conda create -n dis_pytorch_env
+pytorch, torchvision, librosa
 
 enter interactive session with
 srun --mem=5gb --time=4:00:00 --gres=gpu:1 --pty -c 4 /bin/bash
