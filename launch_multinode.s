@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#SBATCH --job-name=aemulus
+#SBATCH --job-name=WaveNet
 #SBATCH --nodes=1
-#SBATCH --output=out/sicn_e9000_NPL1024.out
-#SBATCH --error=out/redo_er
+#SBATCH --output=out/%j.out
+#SBATCH --error=out/%j.err
 #SBATCH --cpus-per-task=1
 #SBATCH --time=15:00:00
 #SBATCH --mem=10gb
@@ -17,7 +17,7 @@ module load anaconda3/5.3.0
 . /share/apps/anaconda3/5.3.0/etc/profile.d/conda.sh
 
 conda activate dis_pytorch_env
-
+python train.py
 
 
 
