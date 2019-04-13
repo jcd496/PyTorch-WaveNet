@@ -53,6 +53,7 @@ def one_hot_encode(targets, num_classes=256):
     #takes targets as numpy array
     one_hots = np.eye(num_classes)[targets]
     return one_hots
+
 def collate_fn(batch):
 
     local_conditioning = len(batch[0]) >= 2
@@ -93,5 +94,9 @@ def collate_fn(batch):
         c_batch = None
     MuTransform = transforms.Compose([ transforms.MuLawEncoding() ])
     x_batch_MuLaw = MuTransform(x_batch)
-    x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()
-    return x_batch, c_batch
+    x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
+    x_batch = x_batch[:,:,:-1]##
+    target = x_batch[:,:,-1:].clone().detach().long()##
+    #target = one_hot_encode(target) ##
+    #target = torch.tensor(target, dtype=torch.int32) ##
+    return x_batch, target   ##c_batch

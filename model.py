@@ -2,16 +2,16 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data import one_hot_encode
 class WaveNet(nn.Module):
     #construct blocks of residual layers. each layer's dilation increases by factor of 2. each layer performs
     #2x1 convolution, separately applies filter and gate, hadamard product results,
     #applies 1x1 convolution, splits output into residual(sum of convolution and input) and split out processing through each layer of each block.
     #blocks are ModuleList of ModuleDict's, each ModuleDict contains two ModuleList, dilated convolution layers and undilated convolution layer.
     #this ensures modules are registered and visable by all methods.
-    def __init__(self, num_blocks, residual_layers, input_size, hidden_size, output_size):
+    def __init__(self, num_blocks, residual_layers, input_size, hidden_size, output_size, batch_size):
         super(WaveNet, self).__init__()
         self.residual_layers = residual_layers
+        self.batch_size = batch_size
         blocks=[]
         #construct blocks of residual layers
         for block in range(num_blocks):
@@ -26,7 +26,8 @@ class WaveNet(nn.Module):
             blocks.append(nn.ModuleDict({'dilated':nn.ModuleList(residual_layers_dilated), 'undilated':nn.ModuleList(residual_layers_undilated)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
-        self.softmax = nn.Softmax()
+        self.fc = nn.Linear(15871,256)##
+        self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
     @staticmethod
     def residual_layer(inputs, block, residual_layers):
@@ -48,13 +49,9 @@ class WaveNet(nn.Module):
         residual_out = inputs
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        residual_out = residual_out.int()
-        residual_out = one_hot_encode(residual_out)
-        print(residual_out.shape)
-        #for  in residual_out[][][]:
-        #    softmax_out = self.softmax(residual_out)
-        #print(softmax_out.shape)
-        return residual_out
+        softmax_out = self.softmax(self.fc(residual_out))##
+        softmax_out = softmax_out.view(self.batch_size,-1)##
+        return softmax_out
 
 
 #if __name__ == '__main__':
