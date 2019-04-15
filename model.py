@@ -8,17 +8,17 @@ class WaveNet(nn.Module):
     #applies 1x1 convolution, splits output into residual(sum of convolution and input) and split out processing through each layer of each block.
     #blocks are ModuleList of ModuleDict's, each ModuleDict contains two ModuleList, dilated convolution layers and undilated convolution layer.
     #this ensures modules are registered and visable by all methods.
-    def __init__(self, num_blocks, residual_layers, input_size, hidden_size, output_size, batch_size):
+    def __init__(self, num_blocks, residual_layers, hidden_channels, output_channels, batch_size):
         super(WaveNet, self).__init__()
         self.residual_layers = residual_layers
         self.batch_size = batch_size
         blocks=[]
-        self.final_conv1 = nn.Conv1d(in_channels=?,
-                                     out_channels=?,
+        self.final_conv1 = nn.Conv1d(in_channels=hidden_channels,
+                                     out_channels=hidden_channels,
                                      kernel_size=1,
                                      bias=False) #Should bias be true? (vincentherrmann implementation)
-        self.final_conv2 = nn.Conv1d(in_channels=?,
-                                     out_channesl=?,
+        self.final_conv2 = nn.Conv1d(in_channels=hidden_channels,
+                                     out_channels=output_channels,
                                      kernel_size=1,
                                      bias=False)
         #construct blocks of residual layers
@@ -32,15 +32,15 @@ class WaveNet(nn.Module):
                 dilation = 2**layer
                 #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
                 #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=dilation//2, dilation=dilation))
-                residual_layers_undilated.append(nn.Conv1d(hidden_size, output_size, 1, dilation=1))
-                residual_layers_gated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
-                residual_layers_filter.append(nn.Conv1d(input_size, hidden_size, 2, padding = 0, dilation=dilation))
+                residual_layers_undilated.append(nn.Conv1d(hidden_channels, hidden_channels, 1, dilation=1))
+                residual_layers_gated.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding=0, dilation=dilation))
+                residual_layers_filter.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding = 0, dilation=dilation))
             #construct ModuleDict of 2x1 convolution and 1x1 convolution, filter and gate convolutions. describes individual block
             blocks.append(nn.ModuleDict({'undilated':nn.ModuleList(residual_layers_undilated),
                 'gated':nn.ModuleList(residual_layers_gated), 'filter':nn.ModuleList(residual_layers_filter)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
-        self.input_conv=nn.Conv1d(256,24,1)
+        self.input_conv=nn.Conv1d(256,hidden_channels,1)
         self.fc = nn.Linear(15871 - 1023*num_blocks,256)##
         self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
@@ -55,38 +55,26 @@ class WaveNet(nn.Module):
             gate_ = torch.sigmoid(gate_)
             x = filter_ * gate_
             x = block['undilated'][layer](x)
-            #LEFT PAD ZEROS TO MATCH DIMENSION AFTER 2X1 CONVOLUTION??
-            #if(layer==0):
-            #    x = F.pad(x, pad=(1,0))
-            a = residual_out[:,:,dilation:]
  
             residual_out = x + residual_out[:,:,dilation:]
             split_out = x
-            print(residual_out.shape)
         return residual_out, split_out
 
     def forward(self, inputs):
         residual_out = self.input_conv(inputs)
-        for i, block in enumerate(self.blocks):
-            residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        #fc_out = self.fc(residual_out)##
-        #fc_out = fc_out.view(-1,256)
-        #softmax_out = self.softmax(fc_out)
-        #print(inputs.size())
-
         final = None
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-            #print("residual_out: " + str(residual_out.size()))
-            #print("split_out: " + str(split_out.size()))
             if (final == None):
 	            final = split_out
             else:
                 final = final + split_out
 
-
-        
-        
+        x = torch.relu(final)
+        x = self.final_conv1(x)
+        x = torch.relu(x)
+        x = self.final_conv2(x)
+        return x
         #fc_out = self.fc(final)##
         #fc_out = fc_out.view(-1,256)
         #softmax_out = self.softmax(fc_out)

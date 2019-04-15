@@ -44,6 +44,7 @@ def train(model, epochs, data_loader, optimizer, criterion):
             
             optimizer.zero_grad()
             output = model(x)
+            print(output.shape, target.shape)
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
@@ -56,7 +57,7 @@ def train(model, epochs, data_loader, optimizer, criterion):
 if __name__ == '__main__':
 
 
-    model = WaveNet(args.blocks, args.layers_per_block, 24, 24, 24,args.batch_size)
+    model = WaveNet(args.blocks, args.layers_per_block, 24, 256, args.batch_size)
     optimizer = optim.Rprop(model.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss()
     model.to(device)
