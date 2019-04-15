@@ -49,8 +49,9 @@ class WaveNet(nn.Module):
         residual_out = inputs
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        softmax_out = self.softmax(self.fc(residual_out))##
-        softmax_out = softmax_out.view(self.batch_size,-1)##
+        fc_out = self.fc(residual_out)##
+        fc_out = fc_out.view(-1,256)
+        softmax_out = self.softmax(fc_out)
         return softmax_out
 
 
