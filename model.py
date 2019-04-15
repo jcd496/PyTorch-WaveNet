@@ -12,6 +12,8 @@ class WaveNet(nn.Module):
         super(WaveNet, self).__init__()
         self.residual_layers = residual_layers
         self.batch_size = batch_size
+        good_values = [2**layer for layer in range(residual_layers)]
+        self.good_values = sum(good_values)*num_blocks
         blocks=[]
         self.final_conv1 = nn.Conv1d(in_channels=hidden_channels,
                                      out_channels=hidden_channels,
@@ -23,31 +25,29 @@ class WaveNet(nn.Module):
                                      bias=False)
         #construct blocks of residual layers
         for block in range(num_blocks):
-            #residual_layers_dilated = []
             residual_layers_undilated=[]
             residual_layers_gated=[]
             residual_layers_filter=[]
             #add 2x1 convolution and 1x1 convolution to each residual layer
             for layer in range(residual_layers):
                 dilation = 2**layer
-                #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
-                #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=dilation//2, dilation=dilation))
                 residual_layers_undilated.append(nn.Conv1d(hidden_channels, hidden_channels, 1, dilation=1))
                 residual_layers_gated.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding=0, dilation=dilation))
                 residual_layers_filter.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding = 0, dilation=dilation))
             #construct ModuleDict of 2x1 convolution and 1x1 convolution, filter and gate convolutions. describes individual block
             blocks.append(nn.ModuleDict({'undilated':nn.ModuleList(residual_layers_undilated),
-                'gated':nn.ModuleList(residual_layers_gated), 'filter':nn.ModuleList(residual_layers_filter)}))
+                                        'gated':nn.ModuleList(residual_layers_gated),
+                                        'filter':nn.ModuleList(residual_layers_filter)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
         self.input_conv=nn.Conv1d(256,hidden_channels,1)
         self.fc = nn.Linear(15871 - 1023*num_blocks,256)##
         self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
-    @staticmethod
-    def residual_layer(inputs, block, residual_layers):
+    
+    def residual_layer(self, inputs, block):
         residual_out = inputs
-        for layer in range(residual_layers):
+        for layer in range(self.residual_layers):
             dilation = 2**layer
             filter_ = block['filter'][layer](residual_out)
             filter_ = torch.tanh(filter_)
@@ -55,21 +55,20 @@ class WaveNet(nn.Module):
             gate_ = torch.sigmoid(gate_)
             x = filter_ * gate_
             x = block['undilated'][layer](x)
- 
             residual_out = x + residual_out[:,:,dilation:]
-            split_out = x
+            split_out = x[:,:,self.good_values:] #only take elements that have passed through all layers
         return residual_out, split_out
 
     def forward(self, inputs):
         residual_out = self.input_conv(inputs)
         final = None
         for i, block in enumerate(self.blocks):
-            residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
+            residual_out, split_out = self.residual_layer(residual_out, self.blocks[i])
             if (final == None):
 	            final = split_out
             else:
                 final = final + split_out
-
+        
         x = torch.relu(final)
         x = self.final_conv1(x)
         x = torch.relu(x)
@@ -79,12 +78,5 @@ class WaveNet(nn.Module):
         #fc_out = fc_out.view(-1,256)
         #softmax_out = self.softmax(fc_out)
         #return softmax_out
-        return None
 
 
-#if __name__ == '__main__':
-    #just to test
-#    model = WaveNet(2, 3, 1, 1, 1)
-    #is this the form of input data???
-#    inputs = torch.ones([1,1,6])
-#    print(model(inputs))
