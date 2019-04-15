@@ -50,8 +50,11 @@ def _pad_2d(x, max_len, b_pad=0):
 
 def one_hot_encode(targets, num_classes=256):
     #takes targets as numpy array
-    one_hots = np.eye(num_classes)[targets]
-    return one_hots
+    one_hots = []
+    for target in targets:
+        target = target.long().numpy().reshape(-1)
+        one_hots.append(np.eye(num_classes)[target])
+    return np.array(one_hots)
 
 def collate_fn(batch):
 
@@ -85,7 +88,9 @@ def collate_fn(batch):
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
     x_batch = x_batch[:,:,:-1]##
     target = x_batch[:,:,-1:].clone().detach().long()##
-    
+    x_batch = one_hot_encode(x_batch)
+    x_batch = torch.tensor(x_batch, dtype=torch.float32)
+    x_batch = x_batch.transpose(1,2)
     #x_batch = x_batch[:,:,:-1024]##for prediciting residual field size target
     #target = x_batch[:,:,-1024:].clone().detach().long()##for predicting residual field size target
     

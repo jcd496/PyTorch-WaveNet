@@ -32,6 +32,7 @@ class WaveNet(nn.Module):
                 'gated':nn.ModuleList(residual_layers_gated), 'filter':nn.ModuleList(residual_layers_filter)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
+        self.input_conv=nn.Conv1d(256,24,1)
         self.fc = nn.Linear(15871 - 1023*num_blocks,256)##
         self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
@@ -51,15 +52,16 @@ class WaveNet(nn.Module):
             #    x = F.pad(x, pad=(1,0))
             residual_out = x + residual_out[:,:,dilation:]
             split_out = x
+            print(residual_out.shape)
         return residual_out, split_out
 
     def forward(self, inputs):
-        residual_out = inputs
+        residual_out = self.input_conv(inputs)
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
-        fc_out = self.fc(residual_out)##
-        fc_out = fc_out.view(-1,256)
-        softmax_out = self.softmax(fc_out)
+        #fc_out = self.fc(residual_out)##
+        #fc_out = fc_out.view(-1,256)
+        #softmax_out = self.softmax(fc_out)
         return softmax_out
 
 
