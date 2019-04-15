@@ -13,6 +13,14 @@ class WaveNet(nn.Module):
         self.residual_layers = residual_layers
         self.batch_size = batch_size
         blocks=[]
+        self.final_conv1 = nn.Conv1d(in_channels=?,
+                                     out_channels=?,
+                                     kernel_size=1,
+                                     bias=False) #Should bias be true? (vincentherrmann implementation)
+        self.final_conv2 = nn.Conv1d(in_channels=?,
+                                     out_channesl=?,
+                                     kernel_size=1,
+                                     bias=False)
         #construct blocks of residual layers
         for block in range(num_blocks):
             #residual_layers_dilated = []
@@ -68,6 +76,9 @@ class WaveNet(nn.Module):
 	            final = split_out
             else:
                 final = final + split_out
+
+
+        
         
         fc_out = self.fc(final)##
         fc_out = fc_out.view(-1,256)
