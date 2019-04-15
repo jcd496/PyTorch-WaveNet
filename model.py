@@ -50,6 +50,8 @@ class WaveNet(nn.Module):
             #LEFT PAD ZEROS TO MATCH DIMENSION AFTER 2X1 CONVOLUTION??
             #if(layer==0):
             #    x = F.pad(x, pad=(1,0))
+            a = residual_out[:,:,dilation:]
+ 
             residual_out = x + residual_out[:,:,dilation:]
             split_out = x
             print(residual_out.shape)
@@ -62,7 +64,23 @@ class WaveNet(nn.Module):
         #fc_out = self.fc(residual_out)##
         #fc_out = fc_out.view(-1,256)
         #softmax_out = self.softmax(fc_out)
-        return softmax_out
+        #print(inputs.size())
+
+        final = None
+        for i, block in enumerate(self.blocks):
+            residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
+            #print("residual_out: " + str(residual_out.size()))
+            #print("split_out: " + str(split_out.size()))
+            if (final == None):
+	            final = split_out
+            else:
+                final = final + split_out
+        
+        #fc_out = self.fc(final)##
+        #fc_out = fc_out.view(-1,256)
+        #softmax_out = self.softmax(fc_out)
+        #return softmax_out
+        return None
 
 
 #if __name__ == '__main__':
