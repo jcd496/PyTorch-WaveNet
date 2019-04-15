@@ -16,13 +16,12 @@ class LJDataset(Dataset):
         self.root_dir = root
         self.train = train
         self.test_size = test_size
-        self.paths = [self.get_files(0), self.get_files(1)]
+        self.paths = [self.get_files(0)]##
     def __len__(self):
         return len(self.paths[0])
     def __getitem__(self, idx):
         wav = np.load(self.paths[0][idx])
-        mel = np.load(self.paths[1][idx])
-        return wav, mel
+        return wav
     def interest_indices(self,paths):
         test_num_samples = int(self.test_size * len(paths))
         train_indices, test_indices = range(0, len(paths) - test_num_samples), \
@@ -61,44 +60,35 @@ def collate_fn(batch):
     if local_conditioning:
         new_batch = []
         for idx in range(len(batch)):
-            x, c = batch[idx]
+            x = batch[idx]
             
-            assert len(x) %len(c) == 0 and len(x) // len(c) == hop_length
             max_steps = max_time_steps - max_time_steps % hop_length
 
             if len(x) > max_steps:
                 max_time_frames = max_steps // hop_length
-                s = np.random.randint(0, len(c) - max_time_frames)
+                s = np.random.randint(0,  max_time_frames)
                 ts = s*hop_length
                 x = x[ts:ts + hop_length*max_time_frames]
-                c = c[s:s + max_time_frames]
-                assert len(x) % len(c) == 0 and len(x) // len(c) == hop_length
-            new_batch.append((x,c))
+            new_batch.append((x))
         batch=new_batch
     else:
         pass
 
-    input_lengths = [len(x[0]) for x in batch]
+    input_lengths = [len(x) for x in batch]
     max_input_len = max(input_lengths)
 
     x_batch = np.array([_pad_2d(x[0].reshape(-1,1), max_input_len) for x in batch], dtype = np.float32)
     assert len(x_batch.shape) == 3
 
-    if local_conditioning:
-        max_len = max([len(x[1]) for x in batch])
-        c_batch = np.array([_pad_2d(x[1], max_len) for x in batch], dtype = np.float32)
-        assert len(c_batch.shape) == 3
-        c_batch = torch.tensor(c_batch).transpose(1,2).contiguous()
-        del max_len
-    else:
-        c_batch = None
     MuTransform = transforms.Compose([ transforms.MuLawEncoding() ])
     x_batch_MuLaw = MuTransform(x_batch)
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
     x_batch = x_batch[:,:,:-1]##
+    target = x_batch[:,:,-1:].clone().detach().long()##
+    
     #x_batch = x_batch[:,:,:-1024]##for prediciting residual field size target
     #target = x_batch[:,:,-1024:].clone().detach().long()##for predicting residual field size target
-    target = x_batch[:,:,-1:].clone().detach().long()##
+    
     #target = one_hot_encode(target) ##
     #target = torch.tensor(target, dtype=torch.int32) ##
     return x_batch, target   ##c_batch
