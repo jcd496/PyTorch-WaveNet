@@ -9,7 +9,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
-parser.add_argument('--batch_size', type=int, default=50, help='batch size')
+parser.add_argument('--batch_size', type=int, default=1, help='batch size')
 parser.add_argument('--num_workers', type=int, default=0, help='number of workers')
 parser.add_argument('--blocks', type=int, default=1, help='number of blocks of residual layers')
 parser.add_argument('--layers_per_block', type=int, default=10, help='residual layers per block')
@@ -56,7 +56,7 @@ def train(model, epochs, data_loader, optimizer, criterion):
 if __name__ == '__main__':
 
 
-    model = WaveNet(args.blocks, args.layers_per_block, 1, 1, 1,args.batch_size)
+    model = WaveNet(args.blocks, args.layers_per_block, 24, 24, 24,args.batch_size)
     optimizer = optim.Rprop(model.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss()
     model.to(device)
