@@ -63,7 +63,7 @@ class WaveNet(nn.Module):
         for i, block in enumerate(self.blocks):
             residual_out, split_out = self.residual_layer(residual_out, self.blocks[i], self.residual_layers)
             #print("residual_out: " + str(residual_out.size()))
-            print("split_out: " + str(split_out.size()))
+            #print("split_out: " + str(split_out.size()))
             if (final == None):
 	            final = split_out
             else:
