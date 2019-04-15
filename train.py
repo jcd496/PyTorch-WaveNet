@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argpar
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
 parser.add_argument('--batch_size', type=int, default=50, help='batch size')
 parser.add_argument('--num_workers', type=int, default=0, help='number of workers')
-parser.add_argument('--blocks', type=int, default=5, help='number of blocks of residual layers')
-parser.add_argument('--layers_per_block', type=int, default=1, help='residual layers per block')
+parser.add_argument('--blocks', type=int, default=1, help='number of blocks of residual layers')
+parser.add_argument('--layers_per_block', type=int, default=10, help='residual layers per block')
 parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu')
 args = parser.parse_args()
 
@@ -45,7 +45,7 @@ def train(model, epochs, data_loader, optimizer, criterion):
             output = model(x)
             loss = criterion(output, target)
             loss.backward()
-
+            print(output.shape)
             optimizer.step()
 
             running_loss+=loss.item()

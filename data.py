@@ -96,6 +96,8 @@ def collate_fn(batch):
     x_batch_MuLaw = MuTransform(x_batch)
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
     x_batch = x_batch[:,:,:-1]##
+    #x_batch = x_batch[:,:,:-1024]##for prediciting residual field size target
+    #target = x_batch[:,:,-1024:].clone().detach().long()##for predicting residual field size target
     target = x_batch[:,:,-1:].clone().detach().long()##
     #target = one_hot_encode(target) ##
     #target = torch.tensor(target, dtype=torch.int32) ##

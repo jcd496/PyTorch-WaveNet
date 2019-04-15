@@ -20,28 +20,33 @@ class WaveNet(nn.Module):
             #add 2x1 convolution and 1x1 convolution to each residual layer
             for layer in range(residual_layers):
                 dilation = 2**layer
-                residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=dilation//2, dilation=dilation))
+                residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
+                #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=dilation//2, dilation=dilation))
                 residual_layers_undilated.append(nn.Conv1d(hidden_size, output_size, 1, dilation=1))
             #construct ModuleDict of 2x1 convolution and 1x1 convolution. describes individual block
             blocks.append(nn.ModuleDict({'dilated':nn.ModuleList(residual_layers_dilated), 'undilated':nn.ModuleList(residual_layers_undilated)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
-        self.fc = nn.Linear(15871,256)##
+        #self.fc = nn.Linear(13825,256)##for prediciting residual size target
+        self.fc = nn.Linear(14848,256)##
+        #self.fc = nn.Linear(15871,256)##
         self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
     @staticmethod
     def residual_layer(inputs, block, residual_layers):
         residual_out = inputs
         for layer in range(residual_layers):
+            dilation = 2**layer
             x = block['dilated'][layer](residual_out)
+            #padding = block['dilated'][layer].padding[0]
             filter_ = torch.tanh(x)
             gate_ = torch.sigmoid(x)
             x = filter_ * gate_
             x = block['undilated'][layer](x)
             #LEFT PAD ZEROS TO MATCH DIMENSION AFTER 2X1 CONVOLUTION??
-            if(layer==0):
-                x = F.pad(x, pad=(1,0))
-            residual_out = x + residual_out
+            #if(layer==0):
+            #    x = F.pad(x, pad=(1,0))
+            residual_out = x + residual_out[:,:,dilation:]
             split_out = x
         return residual_out, split_out
 
