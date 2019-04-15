@@ -15,21 +15,24 @@ class WaveNet(nn.Module):
         blocks=[]
         #construct blocks of residual layers
         for block in range(num_blocks):
-            residual_layers_dilated = []
+            #residual_layers_dilated = []
             residual_layers_undilated=[]
+            residual_layers_gated=[]
+            residual_layers_filter=[]
             #add 2x1 convolution and 1x1 convolution to each residual layer
             for layer in range(residual_layers):
                 dilation = 2**layer
-                residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
+                #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
                 #residual_layers_dilated.append(nn.Conv1d(input_size, hidden_size, 2, padding=dilation//2, dilation=dilation))
                 residual_layers_undilated.append(nn.Conv1d(hidden_size, output_size, 1, dilation=1))
-            #construct ModuleDict of 2x1 convolution and 1x1 convolution. describes individual block
-            blocks.append(nn.ModuleDict({'dilated':nn.ModuleList(residual_layers_dilated), 'undilated':nn.ModuleList(residual_layers_undilated)}))
+                residual_layers_gated.append(nn.Conv1d(input_size, hidden_size, 2, padding=0, dilation=dilation))
+                residual_layers_filter.append(nn.Conv1d(input_size, hidden_size, 2, padding = 0, dilation=dilation))
+            #construct ModuleDict of 2x1 convolution and 1x1 convolution, filter and gate convolutions. describes individual block
+            blocks.append(nn.ModuleDict({'undilated':nn.ModuleList(residual_layers_undilated),
+                'gated':nn.ModuleList(residual_layers_gated), 'filter':nn.ModuleList(residual_layers_filter)}))
         #construct ModuleList of blocks.  describes entire WaveNet
         self.blocks=nn.ModuleList(blocks)
-        #self.fc = nn.Linear(13825,256)##for prediciting residual size target
-        self.fc = nn.Linear(14848,256)##
-        #self.fc = nn.Linear(15871,256)##
+        self.fc = nn.Linear(15871 - 1023*num_blocks,256)##
         self.softmax = nn.Softmax(dim=1)##
     #helper method for feed forward. describes computation of all residual layers within block    
     @staticmethod
@@ -37,10 +40,10 @@ class WaveNet(nn.Module):
         residual_out = inputs
         for layer in range(residual_layers):
             dilation = 2**layer
-            x = block['dilated'][layer](residual_out)
-            #padding = block['dilated'][layer].padding[0]
-            filter_ = torch.tanh(x)
-            gate_ = torch.sigmoid(x)
+            filter_ = block['filter'][layer](residual_out)
+            filter_ = torch.tanh(filter_)
+            gate_ = block['gated'][layer](residual_out)
+            gate_ = torch.sigmoid(gate_)
             x = filter_ * gate_
             x = block['undilated'][layer](x)
             #LEFT PAD ZEROS TO MATCH DIMENSION AFTER 2X1 CONVOLUTION??

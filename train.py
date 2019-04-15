@@ -14,6 +14,7 @@ parser.add_argument('--num_workers', type=int, default=0, help='number of worker
 parser.add_argument('--blocks', type=int, default=1, help='number of blocks of residual layers')
 parser.add_argument('--layers_per_block', type=int, default=10, help='residual layers per block')
 parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 args = parser.parse_args()
 
 train_data = LJDataset(args.data_path, True, 0.1)
@@ -45,9 +46,7 @@ def train(model, epochs, data_loader, optimizer, criterion):
             output = model(x)
             loss = criterion(output, target)
             loss.backward()
-            print(output.shape)
             optimizer.step()
-
             running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
@@ -61,6 +60,6 @@ if __name__ == '__main__':
     optimizer = optim.Rprop(model.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss()
     model.to(device)
-    train(model, 15, train_loader, optimizer, criterion)
+    train(model, args.epochs, train_loader, optimizer, criterion)
 
 
