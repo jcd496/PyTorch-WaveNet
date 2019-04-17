@@ -45,8 +45,16 @@ def train(model, epochs, data_loader, optimizer, criterion):
             optimizer.zero_grad()
             output = model(x)
             loss = criterion(output, target)
+            for idx, param in enumerate(model.parameters()):
+                if idx == 0:
+                    print(param)
             loss.backward()
             optimizer.step()
+            print("BREAK")
+            for idx, param in enumerate(model.parameters()):
+                if idx == 0:
+                    print(param)
+            
             running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
@@ -58,8 +66,8 @@ if __name__ == '__main__':
     if torch.cuda.is_available() and args.use_cuda:
         device = torch.device('cuda')
     print("Device:", device)
-    model = WaveNet(args.blocks, args.layers_per_block, 24, 256, args.batch_size)
-    optimizer = optim.SGD(model.parameters(), lr=0.001)
+    model = WaveNet(args.blocks, args.layers_per_block, 24, 256)
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
     criterion = nn.CrossEntropyLoss()
     model.to(device)
     train(model, args.epochs, train_loader, optimizer, criterion)
