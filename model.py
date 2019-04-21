@@ -14,7 +14,7 @@ class WaveNet(nn.Module):
         good_values = [2**layer for layer in range(residual_layers)]
         self.good_values = sum(good_values)*num_blocks
         
-        self.input_conv=nn.Conv1d(256,hidden_channels,1)
+        self.input_conv=nn.Conv1d(256,hidden_channels,1, bias=False)
         self.final_conv1 = nn.Conv1d(in_channels=hidden_channels,
                                      out_channels=512,
                                      kernel_size=1,
@@ -24,7 +24,6 @@ class WaveNet(nn.Module):
                                      kernel_size=1,
                                      bias=False)
         #construct blocks of residual layers
-
         residual_layers_residual=[]
         residual_layers_gated=[]
         residual_layers_filter=[]
@@ -33,20 +32,18 @@ class WaveNet(nn.Module):
             #add 2x1 convolution and 1x1 convolution to each residual layer
             for layer in range(residual_layers):
                 dilation = 2**layer
-                residual_layers_residual.append(nn.Conv1d(hidden_channels, hidden_channels, 1, padding=0, dilation=dilation))
-                residual_layers_gated.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding=0, dilation=dilation))
-                residual_layers_filter.append(nn.Conv1d(hidden_channels, hidden_channels, 2, padding = 0, dilation=dilation))
-                residual_layers_split.append(nn.Conv1d(hidden_channels, hidden_channels, 1, padding=0, dilation=dilation))
-            #construct ModuleDict of 2x1 convolution and 1x1 convolution, filter and gate convolutions. describes individual block
+                residual_layers_residual.append(nn.Conv1d(hidden_channels, hidden_channels, 1, bias=False, padding=0, dilation=dilation))
+                residual_layers_gated.append(nn.Conv1d(hidden_channels, hidden_channels, 2, bias=False, padding=0, dilation=dilation))
+                residual_layers_filter.append(nn.Conv1d(hidden_channels, hidden_channels, 2, bias=False, padding=0, dilation=dilation))
+                residual_layers_split.append(nn.Conv1d(hidden_channels, hidden_channels, 1, bias=False, padding=0, dilation=dilation))
 
         #construct ModuleList of blocks.  describes entire WaveNet
         self.residual = nn.ModuleList(residual_layers_residual)
         self.gated = nn.ModuleList(residual_layers_gated)
-        self.filter = nn.ModuleList(residual_layers_filter)
+        self.filter_ = nn.ModuleList(residual_layers_filter)
         self.split = nn.ModuleList(residual_layers_split)
         
-        self.softmax = nn.Softmax(dim=1)##
-    #helper method for feed forward. describes computation of all residual layers within block    
+        self.softmax = nn.LogSoftmax(dim=1)##
     
     def forward(self, inputs):
         residual_out = self.input_conv(inputs)
@@ -54,13 +51,13 @@ class WaveNet(nn.Module):
         for block in range(self.num_blocks):
             for layer in range(self.residual_layers):
                 dilation = 2**layer
-                filter_ = self.filter[self.residual_layers*block + layer](residual_out)
+                filter_ = self.filter_[self.residual_layers*block + layer](residual_out)
                 filter_ = torch.tanh(filter_)
                 gate_ = self.gated[self.residual_layers*block + layer](residual_out)
                 gate_ = torch.sigmoid(gate_)
                 out = filter_ * gate_
                 x = self.residual[self.residual_layers*block + layer](out)
-                residual_out = x + residual_out[:,:,dilation:]
+                residual_out = x + residual_out[:,:,-x.shape[2]:]
                 split_out = self.split[self.residual_layers*block + layer](out)
                 split_out = x[:,:,-self.good_values:] #only take elements that have passed through all layers
                 final = final + split_out
@@ -68,8 +65,9 @@ class WaveNet(nn.Module):
         x = self.final_conv1(x)
         x = torch.relu(x)
         x = self.final_conv2(x)
+        #x = x[:,:,-1]
         #x = torch.transpose(x, 2, 1)
-        x = torch.sum(x, dim=2)/x.shape[2]
+        #x = torch.sum(x, dim=1)/x.shape[1]
         x = self.softmax(x)
         return x
 

@@ -34,27 +34,23 @@ class timer():
     def average(self):
         return self.sum/self.count
 
-def train(model, epochs, data_loader, optimizer, criterion):
+def train(model, optimizer, criterion):
     epoch_time = timer()
-    for epoch in range(epochs):
+    for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
         for idx, (x, target) in enumerate(train_loader):
-            target = target.view(-1)  
+            target = target.view(-1,1023)
             x, target = x.to(device), target.to(device)
             optimizer.zero_grad()
             output = model(x)
             loss = criterion(output, target)
-            for idx, param in enumerate(model.parameters()):
-                if idx == 0:
-                    print(param)
+            print(loss.item())
+            #if(idx%3==0):
+            #    print(list(model.parameters())[-15])
             loss.backward()
             optimizer.step()
-            print("BREAK")
-            for idx, param in enumerate(model.parameters()):
-                if idx == 0:
-                    print(param)
-            
+
             running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
@@ -68,8 +64,9 @@ if __name__ == '__main__':
     print("Device:", device)
     model = WaveNet(args.blocks, args.layers_per_block, 24, 256)
     optimizer = optim.SGD(model.parameters(), lr=0.1)
-    criterion = nn.CrossEntropyLoss()
+    #criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
     model.to(device)
-    train(model, args.epochs, train_loader, optimizer, criterion)
+    train(model, optimizer, criterion)
 
 
