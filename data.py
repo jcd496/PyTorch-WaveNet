@@ -89,7 +89,7 @@ def collate_fn(batch):
     target = x_batch[:,:,-target_length:]
     target = target.long()
     x_batch = one_hot_encode(x_batch)
-    x_batch = torch.tensor(x_batch, dtype=torch.float32)
+    x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=True)
     x_batch = x_batch.transpose(1,2)
     x_batch = x_batch[:,:,:-1]##
     #print("x_batch dimensions:", x_batch.shape, "Target dimensions:", target.shape)

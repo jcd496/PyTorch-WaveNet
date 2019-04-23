@@ -36,9 +36,9 @@ class timer():
     def average(self):
         return self.sum/self.count
 
-def train(model, epochs, data_loader, optimizer, criterion):
+def train(model, optimizer, criterion):
     epoch_time = timer()
-    for epoch in range(epochs):
+    for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
         for idx, (x, target) in enumerate(train_loader):
@@ -80,7 +80,9 @@ if __name__ == '__main__':
     #optimizer = optim.SGD(model.parameters(), lr=0.1)
     optimizer = optim.Rprop(model.parameters()) 
     criterion = nn.CrossEntropyLoss()
+    #criterion = nn.CrossEntropyLoss()
+    #criterion = nn.NLLLoss()
     model.to(device)
-    train(model, args.epochs, train_loader, optimizer, criterion)
+    train(model, optimizer, criterion)
 
 
