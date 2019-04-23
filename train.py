@@ -7,6 +7,8 @@ from model import WaveNet
 from time import monotonic
 import argparse
 
+from torchviz import make_dot, make_dot_from_trace #remove this
+
 parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
 parser.add_argument('--batch_size', type=int, default=50, help='batch size')
@@ -40,21 +42,29 @@ def train(model, epochs, data_loader, optimizer, criterion):
         running_loss = 0.0
         epoch_s = monotonic()
         for idx, (x, target) in enumerate(train_loader):
-            target = target.view(-1)  
+            print(idx * 50, "done.")
+            target = target.view(-1) 
             x, target = x.to(device), target.to(device)
             optimizer.zero_grad()
             output = model(x)
-            loss = criterion(output, target)
+            #print(output.shape, target.shape)
+            '''
             for idx, param in enumerate(model.parameters()):
                 if idx == 0:
                     print(param)
+            '''
+            #output = output.transpose(1, 2)
+            #print(sum(output[0,0,:]))
+            loss = criterion(output.squeeze(), target.squeeze())
             loss.backward()
             optimizer.step()
-            print("BREAK")
+            #print("BREAK")
+            '''
             for idx, param in enumerate(model.parameters()):
                 if idx == 0:
                     print(param)
-            
+            '''
+            #print(loss.item())    
             running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
@@ -67,7 +77,8 @@ if __name__ == '__main__':
         device = torch.device('cuda')
     print("Device:", device)
     model = WaveNet(args.blocks, args.layers_per_block, 24, 256)
-    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    #optimizer = optim.SGD(model.parameters(), lr=0.1)
+    optimizer = optim.Rprop(model.parameters()) 
     criterion = nn.CrossEntropyLoss()
     model.to(device)
     train(model, args.epochs, train_loader, optimizer, criterion)

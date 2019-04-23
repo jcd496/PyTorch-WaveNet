@@ -13,16 +13,19 @@ class WaveNet(nn.Module):
 
         good_values = [2**layer for layer in range(residual_layers)]
         self.good_values = sum(good_values)*num_blocks
+        self.receptive_field = self.good_values
+        self.skip_start = self.good_values - 1
         
         self.input_conv=nn.Conv1d(256,hidden_channels,1)
         self.final_conv1 = nn.Conv1d(in_channels=hidden_channels,
                                      out_channels=512,
                                      kernel_size=1,
-                                     bias=False) #Should bias be true? (vincentherrmann implementation)
+                                     bias=True) #Should bias be true? (vincentherrmann implementation)
         self.final_conv2 = nn.Conv1d(in_channels=512,
                                      out_channels=output_channels,
                                      kernel_size=1,
-                                     bias=False)
+                                     bias=True)
+
         #construct blocks of residual layers
 
         residual_layers_residual=[]
@@ -49,8 +52,11 @@ class WaveNet(nn.Module):
     #helper method for feed forward. describes computation of all residual layers within block    
     
     def forward(self, inputs):
+        input_length = inputs.shape[2]
+        target_length = input_length - self.good_values
         residual_out = self.input_conv(inputs)
         final = 0
+        final_set = False
         for block in range(self.num_blocks):
             for layer in range(self.residual_layers):
                 dilation = 2**layer
@@ -62,15 +68,31 @@ class WaveNet(nn.Module):
                 x = self.residual[self.residual_layers*block + layer](out)
                 residual_out = x + residual_out[:,:,dilation:]
                 split_out = self.split[self.residual_layers*block + layer](out)
-                split_out = x[:,:,-self.good_values:] #only take elements that have passed through all layers
-                final = final + split_out
+                split_out = x[:,:,-target_length:] #only take elements that have passed through all layers
+                if final_set:
+                    final = final + split_out
+                else:
+                    final_set = True
+                    final = split_out
+
         x = torch.relu(final)
         x = self.final_conv1(x)
         x = torch.relu(x)
         x = self.final_conv2(x)
-        #x = torch.transpose(x, 2, 1)
-        x = torch.sum(x, dim=2)/x.shape[2]
-        x = self.softmax(x)
-        return x
 
+        [n, c, l] = x.size()
+        x = x.transpose(1, 2).contiguous()
+        x = x.view(n * l, c)
+        #print(x.shape)
+        #x = torch.transpose(x, 2, 1)
+        #x = torch.sum(x, dim=2)/x.shape[2]
+        #print(x.shape)
+        #print(x)
+        #x = self.softmax(x)
+        #print(x.shape)
+        #print(x)
+        #§§quit()
+        #x = x[:,:,-1023:]
+        #print("Output dimensions:", x.shape)
+        return x
 

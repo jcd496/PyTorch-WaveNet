@@ -82,11 +82,17 @@ def collate_fn(batch):
     x_batch_MuLaw = np.array([MuTransform(_pad_2d(x.reshape(-1,1), max_input_len)) for x in batch], dtype = np.float32)
     assert len(x_batch_MuLaw.shape) == 3
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
-    x_batch = x_batch[:,:,:-1]##
-    target = x_batch[:,:,-1].clone().detach().long()##
+
+    receptive_field = sum([2 ** i for i in range(10)]) + 1
+    input_length = x_batch.shape[2]
+    target_length = input_length - receptive_field
+    target = x_batch[:,:,-target_length:]
+    target = target.long()
     x_batch = one_hot_encode(x_batch)
     x_batch = torch.tensor(x_batch, dtype=torch.float32)
     x_batch = x_batch.transpose(1,2)
+    x_batch = x_batch[:,:,:-1]##
+    #print("x_batch dimensions:", x_batch.shape, "Target dimensions:", target.shape)
     #x_batch = x_batch[:,:,:-1024]##for prediciting residual field size target
     #target = x_batch[:,:,-1024:].clone().detach().long()##for predicting residual field size target
     
