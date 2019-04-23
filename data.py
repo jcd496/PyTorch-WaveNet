@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 import transforms 
 max_time_steps = 16000
 hop_length = 256
-
+receptive_field = 0
 class LJDataset(Dataset):
     def __init__(self, root, train=True, test_size=0.05):
         self.root_dir = root
@@ -57,6 +57,7 @@ def one_hot_encode(targets, num_classes=256):
         one_hots.append(np.eye(num_classes)[target])
     return np.array(one_hots)
 
+
 def collate_fn(batch):
     local_conditioning = len(batch[0]) >= 2
 
@@ -78,24 +79,19 @@ def collate_fn(batch):
         pass
     input_lengths = [len(x) for x in batch]
     max_input_len = max(input_lengths)
+ 
     MuTransform = transforms.Compose([ transforms.MuLawEncoding() ])
     x_batch_MuLaw = np.array([MuTransform(_pad_2d(x.reshape(-1,1), max_input_len)) for x in batch], dtype = np.float32)
     assert len(x_batch_MuLaw.shape) == 3
+    
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
-
-    receptive_field = sum([2 ** i for i in range(10)]) + 1
     input_length = x_batch.shape[2]
     target_length = input_length - receptive_field
     target = x_batch[:,:,-target_length:]
     target = target.long()
+    
     x_batch = one_hot_encode(x_batch)
     x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=True)
     x_batch = x_batch.transpose(1,2)
     x_batch = x_batch[:,:,:-1]##
-    #print("x_batch dimensions:", x_batch.shape, "Target dimensions:", target.shape)
-    #x_batch = x_batch[:,:,:-1024]##for prediciting residual field size target
-    #target = x_batch[:,:,-1024:].clone().detach().long()##for predicting residual field size target
-    
-    #target = one_hot_encode(target) ##
-    #target = torch.tensor(target, dtype=torch.int32) ##
     return x_batch, target   ##c_batch

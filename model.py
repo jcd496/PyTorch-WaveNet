@@ -11,10 +11,8 @@ class WaveNet(nn.Module):
         self.num_blocks = num_blocks
         self.residual_layers = residual_layers
 
-        good_values = [2**layer for layer in range(residual_layers)]
-        self.good_values = sum(good_values)*num_blocks
-        self.receptive_field = self.good_values
-        self.skip_start = self.good_values - 1
+        good_values = [2**layer for layer in range(residual_layers)] 
+        self.residual_field = sum(good_values)*num_blocks
         
         self.input_conv=nn.Conv1d(256,hidden_channels,1, bias=False)
         self.final_conv1 = nn.Conv1d(in_channels=hidden_channels,
@@ -50,10 +48,9 @@ class WaveNet(nn.Module):
     
     def forward(self, inputs):
         input_length = inputs.shape[2]
-        target_length = input_length - self.good_values
+        target_length = input_length - self.residual_field
         residual_out = self.input_conv(inputs)
         final = 0
-        final_set = False
         for block in range(self.num_blocks):
             for layer in range(self.residual_layers):
                 dilation = 2**layer
@@ -66,11 +63,7 @@ class WaveNet(nn.Module):
                 residual_out = x + residual_out[:,:,-x.shape[2]:]
                 split_out = self.split[self.residual_layers*block + layer](out)
                 split_out = x[:,:,-target_length:] #only take elements that have passed through all layers
-                if final_set:
-                    final = final + split_out
-                else:
-                    final_set = True
-                    final = split_out
+                final = final + split_out
 
         x = torch.relu(final)
         x = self.final_conv1(x)
@@ -80,19 +73,5 @@ class WaveNet(nn.Module):
         [n, c, l] = x.size()
         x = x.transpose(1, 2).contiguous()
         x = x.view(n * l, c)
-        #print(x.shape)
-        #x = torch.transpose(x, 2, 1)
-        #x = torch.sum(x, dim=2)/x.shape[2]
-        #print(x.shape)
-        #print(x)
-        #x = self.softmax(x)
-        #print(x.shape)
-        #print(x)
-        #§§quit()
-        #x = x[:,:,-1023:]
-        #print("Output dimensions:", x.shape)
-        #x = x[:,:,-1]
-        #x = torch.transpose(x, 2, 1)
-        #x = torch.sum(x, dim=1)/x.shape[1]
         return x
 
