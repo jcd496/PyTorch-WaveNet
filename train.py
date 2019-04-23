@@ -19,7 +19,7 @@ parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 args = parser.parse_args()
 
-D.receptive_field = (sum([2**l for l in range(args.layers_per_block)])+1)*args.blocks
+D.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
 print(D.receptive_field)
 train_data = D.LJDataset(args.data_path, True, 0.1)
 print("Number of training inputs:", len(train_data))
