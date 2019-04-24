@@ -85,13 +85,14 @@ def collate_fn(batch):
     assert len(x_batch_MuLaw.shape) == 3
     
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
+
     input_length = x_batch.shape[2]
     target_length = input_length - receptive_field
     target = x_batch[:,:,-target_length:]
-    target = target.long()
+    target = target.clone().detach().long()
     
     x_batch = one_hot_encode(x_batch)
-    x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=True)
+    x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=False)#changed to False to support multiprocessing
     x_batch = x_batch.transpose(1,2)
     x_batch = x_batch[:,:,:-1]##
     return x_batch, target   ##c_batch
