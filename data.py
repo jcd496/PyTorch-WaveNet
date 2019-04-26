@@ -8,6 +8,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import transforms 
+
+from utils import encode_mu_law, decode_mu_law
+from scipy.io import wavfile
+
 max_time_steps = 16000
 hop_length = 256
 receptive_field = 0
@@ -96,3 +100,70 @@ def collate_fn(batch):
     x_batch = x_batch.transpose(1,2)
     x_batch = x_batch[:,:,:-1]##
     return x_batch, target   ##c_batch
+
+def data_generation(data, framerate, seq_size, mu, gen_mode=None):
+    """
+    Description : data generation to loading data
+    """
+    if gen_mode == 'sin':
+        t = np.linspace(0, 5, framerate*5)
+        data = np.sin(2*np.pi*220*t) + np.sin(2*np.pi*224*t)
+    div = max(data.max(), abs(data.min()))
+    data = data/div
+    while True:
+        start = np.random.randint(0, data.shape[0]-seq_size)
+        ys = data[start:start+seq_size]
+        ys = encode_mu_law(ys, mu)
+        yield torch.tensor(ys[:seq_size])
+
+
+def data_generation_sample(data, framerate, seq_size, mu, gen_mode=None):
+    """
+    Description : sample data generation to loading data
+    """
+    if gen_mode == 'sin':
+        t = np.linspace(0, 5, framerate*5)
+        data = np.sin(2*np.pi*220*t) + np.sin(2*np.pi*224*t)
+    div = max(data.max(), abs(data.min()))
+    data = data/div
+    start = 0
+    ys = data[start:start+seq_size]
+    ys = encode_mu_law(ys, mu)
+    return torch.tensor(ys[:seq_size])
+
+
+def load_wav(file_nm):
+    """
+    Description : load wav file
+    """
+    fs, data = wavfile.read(os.getcwd()+'/data/'+file_nm)
+    return  fs, data
+
+def generate_slow(x, models, dilation_depth, n_repeat, n=100):
+    """
+    Description : module for generation core
+    """
+    dilations = [2**i for i in range(dilation_depth)] * n_repeat
+    res = list(x.numpy())
+    for i in range(n):
+        x = torch.tensor(res[-sum(dilations)-1:])
+        x = x.view(1, -1)
+        x = one_hot_encode(x)
+        x = torch.tensor(x, dtype=torch.float32)
+        x = x.transpose(1, 2)
+        y = models(x)
+        y.squeeze()
+        res.append(y.argmax(1).numpy()[-1])
+    return res
+
+def generation(mu, model):
+    """
+    Description : module for generation
+    """
+    fs, data = load_wav('parametric-2.wav')
+    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=3000)
+    gen_rst = generate_slow(initial_data[0:3000], model, dilation_depth=10,\
+            n_repeat=2, n=5000)
+    gen_wav = np.array(gen_rst)
+    gen_wav = decode_mu_law(gen_wav, 128)
+    np.save("wav.npy", gen_wav)
