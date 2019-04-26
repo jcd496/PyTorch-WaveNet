@@ -111,7 +111,7 @@ if __name__ == '__main__':
         predictions = predict(model)
         values, predictions = torch.topk(predictions, 1, dim=1)
         expander = MuLawExpanding()
-        predictions = expander(predictions.numpy()[:,0])
+        predictions = expander(predictions.squeeze().numpy())
         predictions = predictions.astype(np.float32)
         to_wav(args.save_wav, predictions)
 
