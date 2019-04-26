@@ -2,7 +2,7 @@ from __future__ import division, print_function
 from warnings import warn
 import torch
 import numpy as np
-
+from scipy.io.wavfile import write
 
 class Compose(object):
     """Composes several transforms together.
@@ -563,3 +563,8 @@ class MuLawExpanding(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
+
+
+
+def to_wav(path, data, sample_rate=22050):
+    write(path, sample_rate, data)
