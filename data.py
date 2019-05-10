@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import transforms 
-
+import torch.nn.functional as F
 from utils import encode_mu_law, decode_mu_law
 from scipy.io import wavfile
 
@@ -57,7 +57,7 @@ def one_hot_encode(targets, num_classes=256):
     #takes targets as numpy array
     one_hots = []
     for target in targets:
-        target = target.long().numpy().reshape(-1)
+        target = target.long().cpu().numpy().reshape(-1)
         one_hots.append(np.eye(num_classes)[target])
     return np.array(one_hots)
 
@@ -89,10 +89,12 @@ def collate_fn(batch):
     assert len(x_batch_MuLaw.shape) == 3
     
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
+    x_batch = F.pad(x_batch, pad=(1,0)) #left pad with single 0
 
     input_length = x_batch.shape[2]
     target_length = input_length - receptive_field
     target = x_batch[:,:,-target_length:]
+    #target = x_batch[:,:,-(target_length-1):] #to shift output right by single element
     target = target.clone().detach().long()
     
     x_batch = one_hot_encode(x_batch)
@@ -136,10 +138,10 @@ def load_wav(file_nm):
     """
     Description : load wav file
     """
-    fs, data = wavfile.read(os.getcwd()+'/data/'+file_nm)
+    fs, data = wavfile.read(os.getcwd()+'/'+file_nm)
     return  fs, data
 
-def generate_slow(x, models, dilation_depth, n_repeat, n=100):
+def generate_slow(x, models, dilation_depth, n_repeat, device, conditioning, n=10000):
     """
     Description : module for generation core
     """
@@ -148,22 +150,24 @@ def generate_slow(x, models, dilation_depth, n_repeat, n=100):
     for i in range(n):
         x = torch.tensor(res[-sum(dilations)-1:])
         x = x.view(1, -1)
+        x = F.pad(x, pad=(1,0))
         x = one_hot_encode(x)
         x = torch.tensor(x, dtype=torch.float32)
         x = x.transpose(1, 2)
-        y = models(x)
-        y.squeeze()
+        x = x.to(device)
+        y = models(x, conditioning)
+        y = y.squeeze().cpu()
         res.append(y.argmax(1).numpy()[-1])
     return res
 
-def generation(mu, model):
+def generation(mu, model, device, conditioning):
     """
     Description : module for generation
     """
-    fs, data = load_wav('parametric-2.wav')
+    fs, data = load_wav('first_input_15000.wav')
     initial_data = data_generation_sample(data, fs, mu=mu, seq_size=3000)
-    gen_rst = generate_slow(initial_data[0:3000], model, dilation_depth=10,\
-            n_repeat=2, n=5000)
+    gen_rst = generate_slow(initial_data[0:3000], model, 10, 1, device, conditioning, n=50000)
     gen_wav = np.array(gen_rst)
     gen_wav = decode_mu_law(gen_wav, 128)
     np.save("wav.npy", gen_wav)
+    return gen_wav

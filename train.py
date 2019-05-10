@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from model import WaveNet
 import data as D 
 from transforms import MuLawExpanding, to_wav
@@ -32,6 +33,9 @@ print("Number of training inputs:", len(train_data))
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
 device = torch.device('cpu')
 
+GLOBAL_CONDITIONING = True
+gc_test_vec = torch.tensor([[0,0,0,0,1,0,0,0,0,0] for i in range(args.batch_size)], dtype=torch.float)
+
 if args.use_cuda and torch.cuda.is_available():
     device = torch.device('cuda')
 
@@ -51,47 +55,51 @@ def LJ_train(model, optimizer, criterion):
     epoch_time = timer()
     losses = []
     predictions = None
-    for idx, (x, target) in enumerate(train_loader):
-        break
-    target = target.view(-1) 
-    x, target = x.to(device), target.to(device)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+
+    #for idx, (x, target) in enumerate(train_loader):
+    #    break
+    #target = target.view(-1) 
+    #x, target = x.to(device), target.to(device)
 
     for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
-        #for idx, (x, target) in enumerate(train_loader):
-            #target = target.view(-1) 
-            #x, target = x.to(device), target.to(device)
-        
-        optimizer.zero_grad()
-        
-        output = model(x)
-        loss = criterion(output.squeeze(), target.squeeze())
-        predictions = output.cpu().detach() 
-        loss.backward()
-        optimizer.step()
-        
-        running_loss+=loss.item()
+        for idx, (x, target) in enumerate(train_loader):
+            target = target.view(-1) 
+                x, target = x.to(device), target.to(device)
+
+            optimizer.zero_grad()
+                    
+            output = model(x, gc_test_vec)
+            loss = criterion(output.squeeze(), target.squeeze())
+            predictions = output.cpu().detach() 
+            loss.backward()
+
+            optimizer.step()
+            #if epoch%2==0:
+            #    scheduler.step(loss) 
+            running_loss+=loss.item()
         ##indent from for loop to here
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
-        print("epoch {} loss {:.3f} time {:.3f}".format(epoch, running_loss,epoch_time.average()))
+        print("epoch {} loss {:.3f} time {:.3f}".format(epoch, running_loss, epoch_time.average()))
     return losses, predictions
 
 def predict(model):
     for idx, (x, target) in enumerate(train_loader):
-        continue
+        break
     x, target = x.to(device), target.to(device)
     return model(x).cpu().detach()
 
-def gluon_train(model, loss_fn, optimizer, mu, seq_size, epochs, batch_size):
+def gluon_train(model, loss_fn, optimizer, mu, seq_size, epochs, batch_size, device):
     """
     Description : module for running train
     """
 
     print("Gluon training.")
-    fs, data = D.load_wav('parametric-2.wav')
+    fs, data = D.load_wav('first_input.wav')
     g = D.data_generation(data, fs, mu=mu, seq_size=seq_size)
     loss_save = []
     best_loss = sys.maxsize
@@ -101,10 +109,13 @@ def gluon_train(model, loss_fn, optimizer, mu, seq_size, epochs, batch_size):
         for i in range(batch_size):
             batch = next(g)
             batch = batch.view(1, -1)
+            batch = batch.to(device)
             x = batch[:,:-1]
+            x = F.pad(x, pad=(1,0))
             x = D.one_hot_encode(x)
             x = torch.tensor(x, dtype=torch.float32)
             x = x.transpose(1, 2)
+            x = x.to(device)
             optimizer.zero_grad()
             logits = model(x)
             predictions = logits.cpu().detach()
@@ -130,18 +141,24 @@ if __name__ == '__main__':
     if torch.cuda.is_available() and args.use_cuda:
         device = torch.device('cuda')
     print("Device:", device)
-    model = WaveNet(args.blocks, args.layers_per_block, 24, 256)
+
+    
+    model = WaveNet(args.blocks, args.layers_per_block, 24, 256, GLOBAL_CONDITIONING)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     #optimizer = optim.SGD(model.parameters(), lr=0.1)
     #optimizer = optim.Rprop(model.parameters()) 
     criterion = nn.CrossEntropyLoss()
     
+    model.to(device)
     if args.load_path:
-        state = torch.load(args.load_path)
+        state = torch.load(args.load_path, map_location='cpu')
         model.load_state_dict(state['model'])
+        model.to(device)
+        #temp bug fix 
+        optimizer = optim.Adam(model.parameters(), lr=0.01)
         optimizer.load_state_dict(state['optimizer'])
         
-    model.to(device)
+    gc_test_vec = gc_test_vec.to(device)
 
 
     if (args.dataset == 'gluon'):
@@ -150,8 +167,8 @@ if __name__ == '__main__':
         seq_size = 20000
         epochs = args.epochs
         batch_size = 64
-        losses, predictions = gluon_train(model, criterion, optimizer, mu, seq_size, epochs, batch_size)
-        D.generation(mu, model)
+        losses, predictions = gluon_train(model, criterion, optimizer, mu, seq_size, epochs, batch_size, device)
+        D.generation(mu, model, device)
     else:
          ### LJDataset
         losses, predictions = LJ_train(model, optimizer, criterion)
@@ -163,10 +180,13 @@ if __name__ == '__main__':
         torch.save(state, args.save_path)
     
     if args.save_wav:
-        predictions = predict(model)
+        #predictions = predict(model)
         values, predictions = torch.topk(predictions, 1, dim=1)
         expander = MuLawExpanding()
         predictions = expander(predictions.squeeze().numpy())
+        predictions = predictions.astype(np.float32)
+        mu = 128
+        predictions = D.generation(mu, model, device, gc_test_vec)
         predictions = predictions.astype(np.float32)
         to_wav(args.save_wav, predictions)
 
