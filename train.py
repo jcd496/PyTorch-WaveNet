@@ -10,7 +10,7 @@ from time import monotonic
 import argparse
 import sys
 import numpy as np
-
+import vctk_data as V
 parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
 parser.add_argument('--batch_size', type=int, default=50, help='batch size')
@@ -24,17 +24,16 @@ parser.add_argument('--dataset', type=str, default='ljdataset', help="The datase
 parser.add_argument('--save_path', type=str, default=None, help='path to save trained model')
 parser.add_argument('--load_path', type=str, default=None, help='path to load saved model')
 parser.add_argument('--save_wav', type=str, default=None, help='path to save wav prediction')
+parser.add_argument('--speakers', type=int, default=5, help='number of speakers used in global conditioning')
 args = parser.parse_args()
 
 D.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
+V.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
 
-train_data = D.LJDataset(args.data_path, True, 0.1)
-print("Number of training inputs:", len(train_data))
-train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
+
+
 device = torch.device('cpu')
 
-GLOBAL_CONDITIONING = True
-gc_test_vec = torch.tensor([[0,0,0,0,1,0,0,0,0,0] for i in range(args.batch_size)], dtype=torch.float)
 
 if args.use_cuda and torch.cuda.is_available():
     device = torch.device('cuda')
@@ -55,43 +54,65 @@ def LJ_train(model, optimizer, criterion):
     epoch_time = timer()
     losses = []
     predictions = None
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer)
-
-    #for idx, (x, target) in enumerate(train_loader):
-    #    break
-    #target = target.view(-1) 
-    #x, target = x.to(device), target.to(device)
-
+    train_data = D.LJDataset(args.data_path, True, 0.1)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
+    print("Number of training inputs:", len(train_data))
     for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
         for idx, (x, target) in enumerate(train_loader):
             target = target.view(-1) 
-                x, target = x.to(device), target.to(device)
+            x, target = x.to(device), target.to(device)
 
             optimizer.zero_grad()
                     
-            output = model(x, gc_test_vec)
+            output = model(x)
             loss = criterion(output.squeeze(), target.squeeze())
             predictions = output.cpu().detach() 
             loss.backward()
 
             optimizer.step()
-            #if epoch%2==0:
-            #    scheduler.step(loss) 
             running_loss+=loss.item()
-        ##indent from for loop to here
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
         print("epoch {} loss {:.3f} time {:.3f}".format(epoch, running_loss, epoch_time.average()))
     return losses, predictions
 
-def predict(model):
-    for idx, (x, target) in enumerate(train_loader):
-        break
-    x, target = x.to(device), target.to(device)
-    return model(x).cpu().detach()
+def VCTK_train(model, optimizer, criterion):
+    print("VCTK dataset training.")
+    epoch_time = timer()
+    losses = []
+    predictions = None
+    train_data = V.VCTKDataset(args.data_path, True, 0.1)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, collate_fn=V.collate_fn, num_workers=args.workers)
+    print("Number of training inputs:", len(train_data))
+
+    #for idx, (x, gc, target) in enumerate(train_loader):
+    #    break
+    #target = target.view(-1) 
+    #x, gc, target = x.to(device), gc.to(device), target.to(device)
+    for epoch in range(args.epochs):
+        running_loss = 0.0
+        epoch_s = monotonic()
+        for idx, (x, gc, target) in enumerate(train_loader):
+            target = target.view(-1) 
+            x, gc, target = x.to(device), gc.to(device), target.to(device)
+
+            optimizer.zero_grad()
+                    
+            output = model(x, gc)
+            loss = criterion(output.squeeze(), target.squeeze())
+            predictions = output 
+            loss.backward()
+            
+            optimizer.step()
+            running_loss+=loss.item()
+        epoch_f = monotonic()
+        epoch_time.update((epoch_f - epoch_s))
+        losses.append(running_loss)
+        print("epoch {} loss {:.3f} time {:.3f}".format(epoch, running_loss, epoch_time.average()))
+    return losses, predictions.cpu().detach()
 
 def gluon_train(model, loss_fn, optimizer, mu, seq_size, epochs, batch_size, device):
     """
@@ -142,11 +163,12 @@ if __name__ == '__main__':
         device = torch.device('cuda')
     print("Device:", device)
 
-    
-    model = WaveNet(args.blocks, args.layers_per_block, 24, 256, GLOBAL_CONDITIONING)
+    GLOBAL_CONDITIONING = False
+    if (args.dataset == 'VCTK'):
+        GLOBAL_CONDITIONING = True
+        
+    model = WaveNet(args.blocks, args.layers_per_block, 24, 256, GLOBAL_CONDITIONING, args.speakers)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-    #optimizer = optim.SGD(model.parameters(), lr=0.1)
-    #optimizer = optim.Rprop(model.parameters()) 
     criterion = nn.CrossEntropyLoss()
     
     model.to(device)
@@ -157,9 +179,6 @@ if __name__ == '__main__':
         #temp bug fix 
         optimizer = optim.Adam(model.parameters(), lr=0.01)
         optimizer.load_state_dict(state['optimizer'])
-        
-    gc_test_vec = gc_test_vec.to(device)
-
 
     if (args.dataset == 'gluon'):
         ### Gluon train
@@ -169,8 +188,11 @@ if __name__ == '__main__':
         batch_size = 64
         losses, predictions = gluon_train(model, criterion, optimizer, mu, seq_size, epochs, batch_size, device)
         D.generation(mu, model, device)
+    elif (args.dataset == 'VCTK'):
+        ### VCTKDataset
+        losses, predictions = VCTK_train(model, optimizer, criterion)
     else:
-         ### LJDataset
+       ###LJ dataset
         losses, predictions = LJ_train(model, optimizer, criterion)
     
     if args.save_path:
@@ -180,14 +202,10 @@ if __name__ == '__main__':
         torch.save(state, args.save_path)
     
     if args.save_wav:
-        #predictions = predict(model)
         values, predictions = torch.topk(predictions, 1, dim=1)
         expander = MuLawExpanding()
         predictions = expander(predictions.squeeze().numpy())
         predictions = predictions.astype(np.float32)
-        mu = 128
-        predictions = D.generation(mu, model, device, gc_test_vec)
-        predictions = predictions.astype(np.float32)
-        to_wav(args.save_wav, predictions)
+        to_wav(args.save_wav, predictions, sample_rate=48000)
 
     print(losses)
