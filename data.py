@@ -1,4 +1,4 @@
-####Data Handling reproduced from the work of Sungwon Kim et al as audio processing is out of the scope of this project
+####Data Handling for LJDataset is reproduced and significantly modified from the work of Sungwon Kim et al as audio processing is out of the scope of this project
 ###Original work may be found on the FloWaveNet github
 ###https://github.com/ksw0306/FloWaveNet
 
@@ -8,13 +8,16 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import transforms 
-
-from utils import encode_mu_law, decode_mu_law
+import torch.nn.functional as F
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from scipy.io import wavfile
 
 max_time_steps = 16000
 hop_length = 256
 receptive_field = 0
+target_length = 0
 class LJDataset(Dataset):
     def __init__(self, root, train=True, test_size=0.05):
         self.root_dir = root
@@ -22,6 +25,7 @@ class LJDataset(Dataset):
         self.test_size = test_size
         self.paths = self.get_files(0)##
     def __len__(self):
+        #return 2000
         return len(self.paths)
     def __getitem__(self, idx):
         wav = np.load(self.paths[idx])
@@ -45,7 +49,7 @@ class LJDataset(Dataset):
         paths = list(map(lambda f: os.path.join(self.root_dir, f), paths))
         indices = self.interest_indices(paths)
         paths = list(np.array(paths)[indices])
-        self.lengthss = list(np.array(self.lengths)[indices])
+        self.lengths = list(np.array(self.lengths)[indices])
         self.lengths = list(map(int, self.lengths))
         return paths
 
@@ -63,20 +67,16 @@ def one_hot_encode(targets, num_classes=256):
 
 
 def collate_fn(batch):
-    local_conditioning = len(batch[0]) >= 2
+    input_length = receptive_field + target_length
 
-    if local_conditioning:
+    if len(batch[0]) >= 2:
         new_batch = []
         for idx in range(len(batch)):
             x = batch[idx]
             
-            max_steps = max_time_steps - max_time_steps % hop_length
-
-            if len(x) > max_steps:
-                max_time_frames = max_steps // hop_length
-                s = np.random.randint(0,  max_time_frames)
-                ts = s*hop_length
-                x = x[ts:ts + hop_length*max_time_frames]
+            if len(x) > input_length:
+                s = np.random.randint(0,  len(x) - input_length)
+                x = x[s:s + input_length]
             new_batch.append((x))
         batch=new_batch
     else:
@@ -91,45 +91,34 @@ def collate_fn(batch):
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
 
     input_length = x_batch.shape[2]
-    target_length = input_length - receptive_field
-    target = x_batch[:,:,-target_length:]
+    t_len = input_length - receptive_field
+    target = x_batch[:,:,-t_len:]
     target = target.clone().detach().long()
     
     x_batch = one_hot_encode(x_batch)
     x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=False)#changed to False to support multiprocessing
     x_batch = x_batch.transpose(1,2)
-    x_batch = x_batch[:,:,:-1]##
-    return x_batch, target   ##c_batch
-
-def data_generation(data, framerate, seq_size, mu, gen_mode=None):
-    """
-    Description : data generation to loading data
-    """
-    if gen_mode == 'sin':
-        t = np.linspace(0, 5, framerate*5)
-        data = np.sin(2*np.pi*220*t) + np.sin(2*np.pi*224*t)
-    div = max(data.max(), abs(data.min()))
-    data = data/div
-    while True:
-        start = np.random.randint(0, data.shape[0]-seq_size)
-        ys = data[start:start+seq_size]
-        ys = encode_mu_law(ys, mu)
-        yield torch.tensor(ys[:seq_size])
-
-
-def data_generation_sample(data, framerate, seq_size, mu, gen_mode=None):
+    x_batch = x_batch[:,:,:-1]
+    return x_batch, target 
+         
+def data_generation_sample(data, framerate, seq_size, mu, gen_mode=None, start = 0, dataset = 'ljdataset'):
     """
     Description : sample data generation to loading data
     """
     if gen_mode == 'sin':
         t = np.linspace(0, 5, framerate*5)
         data = np.sin(2*np.pi*220*t) + np.sin(2*np.pi*224*t)
-    div = max(data.max(), abs(data.min()))
-    data = data/div
-    start = 0
+
     ys = data[start:start+seq_size]
-    ys = encode_mu_law(ys, mu)
-    return torch.tensor(ys[:seq_size])
+    if dataset == 'bach':
+        ys = torch.tensor(ys[:seq_size])
+    else:
+        # ljdata is already b/n -1 and 1
+        encoder = transforms.MuLawEncoding()
+        ys = encoder(ys)
+        ys = torch.tensor(ys[:seq_size])
+
+    return ys
 
 
 def load_wav(file_nm):
@@ -139,31 +128,67 @@ def load_wav(file_nm):
     fs, data = wavfile.read(os.getcwd()+'/data/'+file_nm)
     return  fs, data
 
-def generate_slow(x, models, dilation_depth, n_repeat, n=100):
+def generate_slow(x, models, device, dilation_depth, n_repeat, n=100, sample=False):
     """
     Description : module for generation core
     """
+    models.eval()
     dilations = [2**i for i in range(dilation_depth)] * n_repeat
-    res = list(x.numpy())
+    res = list(x)
+   
     for i in range(n):
         x = torch.tensor(res[-sum(dilations)-1:])
         x = x.view(1, -1)
         x = one_hot_encode(x)
         x = torch.tensor(x, dtype=torch.float32)
         x = x.transpose(1, 2)
+        x = x.to(device)
         y = models(x)
-        y.squeeze()
-        res.append(y.argmax(1).numpy()[-1])
-    return res
+        if sample:
+            dist = F.softmax(y, dim=1)
+            dist = dist.cpu().detach()
+            np_dist = dist.numpy()[0]
+            r = np.random.choice(256, p=np_dist)
+        else:
+            y = y.cpu().detach()
+            r = y.argmax(1).numpy()[-1]
 
-def generation(mu, model):
+        print(str(i).zfill(5) + ' ' * (int(int(r) * 198/256.0)) + '.')
+        res.append(r)
+    print(res[-1])
+    return res
+    models.train()
+
+def generation(mu, model, device, filename = 'wav', seconds = 1, dataset = 'ljdataset'):
+    if not filename:
+        filename = 'wav'
+    print("Generating...")
     """
     Description : module for generation
     """
-    fs, data = load_wav('parametric-2.wav')
-    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=3000)
-    gen_rst = generate_slow(initial_data[0:3000], model, dilation_depth=10,\
-            n_repeat=2, n=5000)
+    if dataset == 'bach':
+        data = np.load('train_samples/bach_chaconne/dataset.npz', mmap_mode='r')['arr_0'] # already mu law encoded
+        fs = 16000
+    else:
+        fs = 22050
+        data = np.load("/scratch/jcd496/LJdata/processed/ljspeech-audio-00001.npy")
+    
+    s = fs
+    
+    num_to_gen = seconds * fs
+    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
+ 
+    gen_rst = generate_slow(initial_data[0:4000], model, device, dilation_depth=10,\
+            n_repeat=model.num_blocks, n=num_to_gen, sample=False)
     gen_wav = np.array(gen_rst)
-    gen_wav = decode_mu_law(gen_wav, 128)
-    np.save("wav.npy", gen_wav)
+    plt.plot(gen_wav, ',')
+    pth = filename + ".jpg"
+    print(pth)
+    plt.savefig(pth)
+    expander = transforms.MuLawExpanding()
+    gen_wav2 = expander(gen_wav).astype(np.float32)
+
+    pth = filename + ".wav"
+    print(pth)
+    transforms.to_wav(pth, gen_wav2, sample_rate=fs)
+    print("Generation complete.")
