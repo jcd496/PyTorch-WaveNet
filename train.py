@@ -10,7 +10,7 @@ from time import monotonic
 import argparse
 import sys
 import numpy as np
-import vctk_data as V
+#import vctk_data as V
 parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
 parser.add_argument('--batch_size', type=int, default=50, help='batch size')
@@ -28,7 +28,7 @@ parser.add_argument('--speakers', type=int, default=5, help='number of speakers 
 args = parser.parse_args()
 
 D.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
-V.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
+#V.receptive_field = (sum([2**l for l in range(args.layers_per_block)]))*args.blocks + 1
 
 
 
@@ -84,30 +84,30 @@ def VCTK_train(model, optimizer, criterion):
     epoch_time = timer()
     losses = []
     predictions = None
-    train_data = V.VCTKDataset(args.data_path, True, 0.1)
-    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, collate_fn=V.collate_fn, num_workers=args.workers)
+    train_data = D.VCTKDataset(args.data_path, True, 0.1)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, collate_fn=D.vctk_collate_fn, num_workers=args.workers)
     print("Number of training inputs:", len(train_data))
-
-    #for idx, (x, gc, target) in enumerate(train_loader):
-    #    break
-    #target = target.view(-1) 
-    #x, gc, target = x.to(device), gc.to(device), target.to(device)
+    for idx, (x, gc, target) in enumerate(train_loader):
+        break
+    target = target.view(-1) 
+    x, gc, target = x.to(device), gc.to(device), target.to(device)
     for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
-        for idx, (x, gc, target) in enumerate(train_loader):
-            target = target.view(-1) 
-            x, gc, target = x.to(device), gc.to(device), target.to(device)
+        #for idx, (x, gc, target) in enumerate(train_loader):
+        #    target = target.view(-1) 
+        #    x, gc, target = x.to(device), gc.to(device), target.to(device)
 
-            optimizer.zero_grad()
-                    
-            output = model(x, gc)
-            loss = criterion(output.squeeze(), target.squeeze())
-            predictions = output 
-            loss.backward()
-            
-            optimizer.step()
-            running_loss+=loss.item()
+        optimizer.zero_grad()
+        #gc = torch.tensor([[1,0,0,0,0] for i in range(5)]).float().to(device)        
+        #gc = torch.tensor([[1,0,0,0,0],[0,1,0,0,0],[0,0,1,0,0],[0,0,0,1,0],[0,0,0,0,1]]).float().to(device)        
+        output = model(x, gc)
+        loss = criterion(output.squeeze(), target.squeeze())
+        predictions = output 
+        loss.backward()
+        
+        optimizer.step()
+        running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
@@ -166,7 +166,6 @@ if __name__ == '__main__':
     GLOBAL_CONDITIONING = False
     if (args.dataset == 'VCTK'):
         GLOBAL_CONDITIONING = True
-        
     model = WaveNet(args.blocks, args.layers_per_block, 24, 256, GLOBAL_CONDITIONING, args.speakers)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss()

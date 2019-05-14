@@ -74,8 +74,8 @@ class WaveNet(nn.Module):
                 gate_ = self.gated[self.residual_layers*block + layer](residual_out)
                 
                 if self.global_conditioning:
-                    filter_ += self.gc_filter[self.residual_layers*block + layer](condition_vec).view(filter_.shape[0],1,-1)
-                    gate_ += self.gc_split[self.residual_layers*block + layer](condition_vec).view(gate_.shape[0],1,-1)
+                    filter_ += self.gc_filter[self.residual_layers*block + layer](condition_vec.view(filter_.shape[0],1,-1))
+                    gate_ += self.gc_split[self.residual_layers*block + layer](condition_vec.view(gate_.shape[0],1,-1))
                 
                 filter_ = torch.tanh(filter_)
                 gate_ = torch.sigmoid(gate_)
