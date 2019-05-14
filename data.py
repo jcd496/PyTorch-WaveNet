@@ -92,13 +92,10 @@ def collate_fn(batch):
     assert len(x_batch_MuLaw.shape) == 3
     
     x_batch = torch.tensor(x_batch_MuLaw, dtype=torch.float32).transpose(1,2).contiguous()##
-    x_batch = F.pad(x_batch, pad=(1,0)) #left pad with single 0
 
-    input_length = x_batch.shape[2]
-
-    target_length = input_length - receptive_field
+    input_length = x_batch.shape[2] 
+   
     target = x_batch[:,:,-target_length:]
-    #target = x_batch[:,:,-(target_length-1):] #to shift output right by single element
 
     target = target.clone().detach().long()
     
