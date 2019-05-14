@@ -153,76 +153,8 @@ def VCTK_train(model, optimizer, criterion):
 
     return losses, predictions
 
-def LJ_train(model, optimizer, criterion, evaluate = True):
-    model.train()
-    print("LJdataset training.")
-    epoch_time = timer()
-    losses = []
-    predictions = None
-    for epoch in range(args.epochs):
-        running_loss = 0.0
-        epoch_s = monotonic()
-        for idx, (x, target) in enumerate(train_loader):
-            target = target.view(-1) 
-            x, target = x.to(device), target.to(device)
-            output = model(x)
-            loss = criterion(output.squeeze(), target.squeeze())
-            optimizer.zero_grad()
-            predictions = output.cpu().detach() 
-            loss.backward()
-            running_loss+=loss.item()
-            optimizer.step()
-            #print((idx + 1) * 25)
-        ##indent from for loop to here
-        epoch_f = monotonic()
-        epoch_time.update((epoch_f - epoch_s))
-        losses.append(running_loss)
-        print("epoch {} avg_loss {:.3f} time {:.3f}".format(epoch, running_loss/len(train_loader),epoch_time.average()))
-
-        if args.save_path:
-            if (epoch + 1) % args.save_interval == 0:
-                model.to(torch.device('cpu'))
-                state = {'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'epoch': epoch}
-                t = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
-                pth = args.save_path + '/' + args.model_name + '_' + t + '.pt'
-                torch.save(state, pth)
-                model.to(device)
-                #lss, acc = LJ_evaluate(model, optimizer, criterion)
-                #print("epoch {} loss {:.3f} acc {:.3f}".format(epoch, lss, acc))
-
-    return losses, predictions
-
 
 def evaluate(model, optimizer, criterion, test_loader):
-    print("Device:", device)
-    model.eval()
-    running_loss = 0
-    correct = 0
-
-    for idx, (x, target) in enumerate(test_loader):
-        #print((idx + 1) * args.batch_size)
-        target = target.view(-1)
-        x, target = x.to(device), target.to(device)
-        output = model(x)
-        loss = criterion(output.squeeze(), target.squeeze())
-        running_loss += loss.item()
-        predictions = torch.max(output.cpu().detach(), 1)[1].view(-1)
-        #print("target length", model.target_length)
-        #print("predictions shape b4 view", predictions.shape)
-        predictions  = predictions.view(-1)
-        #print(predictions[14748:14848])
-        #print(target[14748:14848])
-        correct_pred = torch.eq(target.cpu(), predictions)
-        correct += torch.sum(correct_pred).item()
-
-    avg_loss = running_loss / len(test_loader)
-    accuracy = correct / (len(test_data) * model.target_length)
-    model.train()
-    return avg_loss, accuracy
-
-def LJ_evaluate(model, optimizer, criterion):
     print("Device:", device)
     model.eval()
     running_loss = 0
@@ -313,7 +245,7 @@ if __name__ == '__main__':
         D.target_length = 16
         test_data = D.LJDataset(args.data_path, False, args.test_ratio)
         test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
-        lss, acc = LJ_evaluate(model, optimizer, criterion)
+        lss, acc = evaluate(model, optimizer, criterion, test_loader):
         print("loss {:.3f} acc {:.3f}".format(lss, acc))
         quit()
     elif args.dataset == 'bachtest':
@@ -329,21 +261,14 @@ if __name__ == '__main__':
         print("loss {:.3f} acc {:.3f}".format(lss, acc))
         quit()
     elif args.dataset == 'ljdataset':
-         ### LJDataset
-        #losses, predictions = LJ_train(model, optimizer, criterion)
         D.target_length = 16
         train_data = D.LJDataset(args.data_path, True, args.test_ratio)
-        test_data = D.LJDataset(args.data_path, False, args.test_ratio)
         print("Number of training inputs:", len(train_data))
-        print("Number of test inputs:", len(test_data))
         train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
-        losses, predictions = LJ_train(model, optimizer, criterion, evaluate=True)
-    
+        losses, predictions = train(model, optimizer, train_loader, criterion, args.epochs, evaluate = False)
     elif args.dataset == 'VCTK':
         ### VCTKDataset
         losses, predictions = VCTK_train(model, optimizer, criterion)
-        
     elif args.dataset == 'bach':
         output_length = 16
         train_data = BachDataset(dataset_file='train_samples/bach_chaconne/dataset.npz',
