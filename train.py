@@ -10,13 +10,12 @@ import time
 import argparse
 import sys
 import numpy as np
-import gc
 
-from audio_data import WavenetDataset
+from bach_data import BachDataset
 
 import transforms
 
-import audio_data
+#import audio_data
 
 parser = argparse.ArgumentParser(description='WaveNet', formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--data_path', type=str, default='/scratch/jcd496/LJdata/processed', help='data root directory')
@@ -27,15 +26,19 @@ parser.add_argument('--layers_per_block', type=int, default=10, help='residual l
 parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
 parser.add_argument('--mu', type=int, default=128, help='number of epochs')
-parser.add_argument('--dataset', type=str, default='ljdataset', help="The dataset to use. Can be 'ljdataset', 'gluon', or 'bach'")
+parser.add_argument('--dataset', type=str, default='ljdataset', help="The dataset to use. Can be 'ljdataset', 'bach', 'ljtest', or 'bachtest'")
 parser.add_argument('--save_path', type=str, default=None, help='path to save trained model')
 parser.add_argument('--model_name', type=str, default=None, help='path name of model')
 parser.add_argument('--load_path', type=str, default=None, help='path to load saved model')
 parser.add_argument('--save_wav', type=str, default=None, help='path to save wav prediction')
 parser.add_argument('--test_ratio', type=float, default=0.99, help='ratio of data to use for testing. The rest is used for training.')
 parser.add_argument('--gen_len', type=int, default=1, help='number of seconds of data to generate')
-parser.add_argument('--stride', type=int, default=500, help='stride to use in bach dataloader.')
+parser.add_argument('--stride', type=int, default=500, help='stride to use in bach or bachtest dataloader.')
 parser.add_argument('--save_interval', type=int, default=None, help='Save model every <interval> epochs. Default 0.1 * epochs')
+parser.add_argument('--residual_channels', type=int, default=32, help='number of residual channels to use')
+parser.add_argument('--dilation_channels', type=int, default=32, help='number of dilation channels to use')
+parser.add_argument('--skip_channels', type=int, default=1024, help='number of skip channels to use')
+parser.add_argument('--end_channels', type=int, default=512, help='number of end channels to use')
 
 
 args = parser.parse_args()
@@ -153,8 +156,8 @@ def LJ_train(model, optimizer, criterion, evaluate = True):
                 pth = args.save_path + '/' + args.model_name + '_' + t + '.pt'
                 torch.save(state, pth)
                 model.to(device)
-                lss, acc = LJ_evaluate(model, optimizer, criterion)
-                print("epoch {} loss {:.3f} acc {:.3f}".format(epoch, lss, acc))
+                #lss, acc = LJ_evaluate(model, optimizer, criterion)
+                #print("epoch {} loss {:.3f} acc {:.3f}".format(epoch, lss, acc))
 
     return losses, predictions
 
@@ -213,6 +216,7 @@ def LJ_evaluate(model, optimizer, criterion):
     model.train()
     return avg_loss, accuracy
 
+
 def predict(model):
     #for idx, (x, target) in enumerate(train_loader):
         #continue
@@ -222,69 +226,6 @@ def predict(model):
     r = model(x).cpu().detach()
     model.train()
     return r
-
-def gluon_train(model, loss_fn, optimizer, mu, seq_size, epochs, batch_size):
-    """
-    Description : module for running train
-    """
-
-    print("Gluon training.")
-    loss_save = []
-    final_predictions = None
-    if (epochs == 0):
-        return loss_save, final_predictions
-    #fs, data = D.load_wav('parametric-2.wav')
-    data = np.load('dataset.npz', mmap_mode='r')
-    for key in data.keys():
-        print(key)
-    data = data['arr_0']
-    #data = torch.from_numpy(data).type(torch.LongTensor)
-    fs = 16000
-    '''
-    print(type(data[0]))
-    expander = transforms.MuLawExpanding()
-    data = expander(data).astype(np.float32)
-    to_wav("wav.wav", data, sample_rate=fs)
-    quit()
-    '''
-    print("bach length", len(data))
-    g = D.data_generation(data, fs, mu=mu, seq_size=seq_size, dataset = 'gluon')
-    best_loss = sys.maxsize
-    for epoch in range(epochs):
-        loss_tot = 0.0
-        predictions = 0
-        for i in range(batch_size):
-            batch = next(g)
-            batch = batch.view(1, -1)
-            x = batch[:,:-1]
-            x = D.one_hot_encode(x)
-            x = torch.tensor(x, dtype=torch.float32)
-            x = x.transpose(1, 2)
-            x = x.to(device)
-            optimizer.zero_grad()
-            logits = model(x)
-            if i == 0:
-                predictions = logits.cpu().detach()
-            else:
-                predictions = torch.cat((predictions, logits.cpu().detach()), 0)
-
-            sz = logits.shape[0]
-            target = batch[0,-sz:]
-            loss = loss_fn(logits, target.to(device))
-            loss.backward(retain_graph=True)
-            loss_tot += loss.item()
-            optimizer.step()
-        loss_save.append(loss_tot)
-
-        #save the best model
-        current_loss = loss_tot
-        print('epoch {}, loss {}'.format(epoch, loss_tot))
-        if best_loss > current_loss:
-            #self.save_model(epoch, current_loss)
-            final_predictions = predictions
-            best_loss = current_loss
-    print("Best loss:", best_loss)
-    return loss_save, final_predictions
 
         
 if __name__ == '__main__':
@@ -302,12 +243,16 @@ if __name__ == '__main__':
     print("gen_len", args.gen_len)
     print("stride", args.stride)
     print("save_interval", args.save_interval)
+    print("residual_channels", args.residual_channels)
+    print("dilation_channels", args.dilation_channels)
+    print("skip_channels", args.skip_channels)
+    print("end_channels", args.end_channels)
 
     device = torch.device('cpu')
     if torch.cuda.is_available() and args.use_cuda:
         device = torch.device('cuda')
     print("Device:", device)
-    model = WaveNet(args.blocks, args.layers_per_block, 24, 256)
+    model = WaveNet(args.blocks, args.layers_per_block, output_channels=256, residual_channels=args.residual_channels, dilation_channels=args.dilation_channels, skip_channels=args.skip_channels, end_channels=args.end_channels)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     #optimizer = optim.SGD(model.parameters(), lr=0.1)
     #optimizer = optim.Rprop(model.parameters()) 
@@ -324,13 +269,7 @@ if __name__ == '__main__':
     losses = None
     predictions = None 
     mu = 256
-    if (args.dataset == 'gluon'):
-        ### Gluon train
-        seq_size = 20000
-        epochs = args.epochs
-        batch_size = 64
-        losses, predictions = gluon_train(model, criterion, optimizer, mu, seq_size, epochs, batch_size)
-    elif args.dataset == 'ljtest':
+    if args.dataset == 'ljtest':
         D.target_length = 16
         test_data = D.LJDataset(args.data_path, False, args.test_ratio)
         test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
@@ -339,7 +278,7 @@ if __name__ == '__main__':
         quit()
     elif args.dataset == 'bachtest':
         output_length = 16
-        test_data = WavenetDataset(dataset_file='train_samples/bach_chaconne/dataset.npz',
+        test_data = BachDataset(dataset_file='train_samples/bach_chaconne/dataset.npz',
                               item_length=D.receptive_field + output_length - 1,
                               target_length=output_length,
                               file_location='train_samples/bach_chaconne',
@@ -362,7 +301,7 @@ if __name__ == '__main__':
         losses, predictions = LJ_train(model, optimizer, criterion, evaluate=True)
     elif args.dataset == 'bach':
         output_length = 16
-        train_data = WavenetDataset(dataset_file='train_samples/bach_chaconne/dataset.npz',
+        train_data = BachDataset(dataset_file='train_samples/bach_chaconne/dataset.npz',
                               item_length=D.receptive_field + output_length - 1,
                               target_length=output_length,
                               file_location='train_samples/bach_chaconne',
@@ -394,7 +333,7 @@ if __name__ == '__main__':
         save_wav = args.save_path + '/' + args.model_name
         D.generation(mu, model, device, filename = save_wav, seconds = args.gen_len, dataset = args.dataset)
 
-        if args.dataset != 'gluon':
+        if args.dataset != 'bach':
             predictions = predict(model)
             values, predictions = torch.topk(predictions, 1, dim=1)
             expander = MuLawExpanding()

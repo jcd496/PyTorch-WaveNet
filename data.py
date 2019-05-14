@@ -1,4 +1,4 @@
-####Data Handling reproduced from the work of Sungwon Kim et al as audio processing is out of the scope of this project
+####Data Handling for LJDataset is reproduced and significantly modified from the work of Sungwon Kim et al as audio processing is out of the scope of this project
 ###Original work may be found on the FloWaveNet github
 ###https://github.com/ksw0306/FloWaveNet
 
@@ -8,12 +8,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import transforms 
-
+import torch.nn.functional as F
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
-from utils import encode_mu_law, decode_mu_law
 from scipy.io import wavfile
 
 max_time_steps = 16000
@@ -76,10 +74,7 @@ def collate_fn(batch):
         for idx in range(len(batch)):
             x = batch[idx]
             
-     #       max_steps = max_time_steps - max_time_steps % hop_length
-
             if len(x) > input_length:
-                #max_time_frames = max_steps // hop_length
                 s = np.random.randint(0,  len(x) - input_length)
                 x = x[s:s + input_length]
             new_batch.append((x))
@@ -103,31 +98,9 @@ def collate_fn(batch):
     x_batch = one_hot_encode(x_batch)
     x_batch = torch.tensor(x_batch, dtype=torch.float32, requires_grad=False)#changed to False to support multiprocessing
     x_batch = x_batch.transpose(1,2)
-    x_batch = x_batch[:,:,:-1]##
-    return x_batch, target   ##c_batch
-
-def data_generation(data, framerate, seq_size, mu, gen_mode=None, dataset = 'ljdataset'):
-    """
-    Description : data generation to loading data
-    """
-    if gen_mode == 'sin':
-        t = np.linspace(0, 5, framerate*5)
-        data = np.sin(2*np.pi*220*t) + np.sin(2*np.pi*224*t)
-
-    encoder = transforms.MuLawEncoding()
-    while True:
-        start = np.random.randint(0, data.shape[0]-seq_size)
-        ys = data[start:start+seq_size]
-        if dataset == 'bach':
-            ys = torch.tensor(ys[:seq_size])
-        else:
-            ys = encoder(ys)
-            ys = torch.tensor(ys[:seq_size])
-        
-        yield ys
+    x_batch = x_batch[:,:,:-1]
+    return x_batch, target 
          
-
-
 def data_generation_sample(data, framerate, seq_size, mu, gen_mode=None, start = 0, dataset = 'ljdataset'):
     """
     Description : sample data generation to loading data
@@ -155,7 +128,7 @@ def load_wav(file_nm):
     fs, data = wavfile.read(os.getcwd()+'/data/'+file_nm)
     return  fs, data
 
-def generate_slow(x, models, device, dilation_depth, n_repeat, n=100):
+def generate_slow(x, models, device, dilation_depth, n_repeat, n=100, sample=False):
     """
     Description : module for generation core
     """
@@ -163,13 +136,6 @@ def generate_slow(x, models, device, dilation_depth, n_repeat, n=100):
     dilations = [2**i for i in range(dilation_depth)] * n_repeat
     res = list(x)
    
-    '''
-    for i in range(len(x)):
-        r = res[i]
-        print(str(i).zfill(5) + ' ' * (int(int(r) * 198/256.0)) + '.')
-    '''
-    
-
     for i in range(n):
         x = torch.tensor(res[-sum(dilations)-1:])
         x = x.view(1, -1)
@@ -178,12 +144,20 @@ def generate_slow(x, models, device, dilation_depth, n_repeat, n=100):
         x = x.transpose(1, 2)
         x = x.to(device)
         y = models(x)
-        y = y.cpu().detach()
-        r = y.argmax(1).numpy()[-1]
+        if sample:
+            dist = F.softmax(y, dim=1)
+            dist = dist.cpu().detach()
+            np_dist = dist.numpy()[0]
+            r = np.random.choice(256, p=np_dist)
+        else:
+            y = y.cpu().detach()
+            r = y.argmax(1).numpy()[-1]
+
         print(str(i).zfill(5) + ' ' * (int(int(r) * 198/256.0)) + '.')
         res.append(r)
     print(res[-1])
     return res
+    models.train()
 
 def generation(mu, model, device, filename = 'wav', seconds = 1, dataset = 'ljdataset'):
     if not filename:
@@ -192,7 +166,6 @@ def generation(mu, model, device, filename = 'wav', seconds = 1, dataset = 'ljda
     """
     Description : module for generation
     """
-    #fs, data = load_wav('parametric-2.wav')
     if dataset == 'bach':
         data = np.load('train_samples/bach_chaconne/dataset.npz', mmap_mode='r')['arr_0'] # already mu law encoded
         fs = 16000
@@ -203,10 +176,10 @@ def generation(mu, model, device, filename = 'wav', seconds = 1, dataset = 'ljda
     s = fs
     
     num_to_gen = seconds * fs
-    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=s, start = (6 * 60 + 1) * fs, dataset = dataset)
+    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
  
     gen_rst = generate_slow(initial_data[0:4000], model, device, dilation_depth=10,\
-            n_repeat=model.num_blocks, n=num_to_gen)
+            n_repeat=model.num_blocks, n=num_to_gen, sample=False)
     gen_wav = np.array(gen_rst)
     plt.plot(gen_wav, ',')
     pth = filename + ".jpg"

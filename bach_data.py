@@ -9,7 +9,7 @@ import librosa as lr
 import bisect
 
 
-class WavenetDataset(torch.utils.data.Dataset):
+class BachDataset(torch.utils.data.Dataset):
     def __init__(self,
                  dataset_file,
                  item_length,

@@ -6,15 +6,16 @@ class WaveNet(nn.Module):
     #construct blocks of residual layers. each layer's dilation increases by factor of 2. each layer performs
     #2x1 convolution, separately applies filter and gate, hadamard product results,
     #applies 1x1 convolution, splits output into residual(sum of convolution and input) and split out processing through each layer of each block.
-    def __init__(self, num_blocks, residual_layers, hidden_channels, output_channels):
+    def __init__(self, num_blocks, residual_layers, output_channels=256, residual_channels=32, dilation_channels=32, skip_channels=1024, end_channels=512):
         super(WaveNet, self).__init__()
         self.num_blocks = num_blocks
         self.residual_layers = residual_layers
-
+        '''
         residual_channels = 32
         dilation_channels = 32
         skip_channels = 1024
         end_channels = 512
+        '''
         self.target_length = None
 
         good_values = [2**layer for layer in range(residual_layers)] 
