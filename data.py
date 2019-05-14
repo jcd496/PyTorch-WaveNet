@@ -1,5 +1,5 @@
 
-####Data Handling for LJDataset is reproduced and significantly modified from the work of Sungwon Kim et al as audio processing is out of the scope of this project
+####Data Handling for LJDataset is reproduced and significantly modified from the work of Sungwon Kim et al 
 ###Original work may be found on the FloWaveNet github
 ###https://github.com/ksw0306/FloWaveNet
 
