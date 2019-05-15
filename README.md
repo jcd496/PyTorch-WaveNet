@@ -19,7 +19,7 @@ MuLawExpanding and MuLawDecoding in transforms.py credit: Sungwon Kim
 
 ## Basic Run Example:
 
-python train.py -dataset [dataset] --data_path [path/to/dataset/] --epochs [# epochs] --batch_size [# samples per batch] --use_cuda True
+python train.py --dataset [dataset] --data_path [path/to/dataset/] --epochs [# epochs] --batch_size [# samples per batch] --use_cuda True
 
 ## Further usage options available:
 
