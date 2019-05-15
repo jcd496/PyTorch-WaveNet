@@ -1,4 +1,4 @@
-#Pytorch-WaveNet
+# Pytorch-WaveNet
 
 Pytorch implementation of DeepMind's WaveNet utilizing PyTorch
 
