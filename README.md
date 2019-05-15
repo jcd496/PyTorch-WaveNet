@@ -12,7 +12,7 @@ pytorch, torchvision, numpy, matplotlib, scipy
 
 Dynamically built Wavenet model entirely described using command-line arguments.  Driven by train.py with model definitions in model.py and data handling in data.py.  
 Data.py houses functionality to load LJSpeech dataset and VCTK dataset.  
-Also made available is functionality to load Partita for Violin No. 2 by ohann Sebastian Bach, credit: Vincent Herrmann.
+Also made available is functionality to load Partita for Violin No. 2 by Johann Sebastian Bach, credit: Vincent Herrmann.
 MuLawExpanding and MuLawDecoding in transforms.py credit: Sungwon Kim
 
 
