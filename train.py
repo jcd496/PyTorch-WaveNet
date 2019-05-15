@@ -28,7 +28,7 @@ parser.add_argument('--model_name', type=str, default=None, help='path name of m
 parser.add_argument('--load_path', type=str, default=None, help='path to load saved model')
 parser.add_argument('--save_wav', type=str, default=None, help='path to save wav prediction')
 parser.add_argument('--speakers', type=int, default=1, help='number of speakers used in global conditioning')
-parser.add_argument('--test_ratio', type=float, default=0.99, help='ratio of data to use for testing. The rest is used for training.')
+parser.add_argument('--test_ratio', type=float, default=0.30, help='ratio of data to use for testing. The rest is used for training.')
 parser.add_argument('--gen_len', type=int, default=1, help='number of seconds of data to generate')
 parser.add_argument('--stride', type=int, default=500, help='stride to use in bach or bachtest dataloader.')
 parser.add_argument('--save_interval', type=int, default=None, help='Save model every <interval> epochs. Default 0.1 * epochs')
