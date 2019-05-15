@@ -1,5 +1,5 @@
 
-####Bach Data Handling for LJDataset is reproduced from the work of Vincent Herrmann
+####Bach Data Handling is reproduced from the work of Vincent Herrmann
 ###https://github.com/vincentherrmann/pytorch-wavenet
 
 import os
