@@ -89,7 +89,6 @@ def train(model, optimizer, dataloader, criterion, epochs, evaluate = True):
             running_loss+=loss.item()
             optimizer.step()
             predictions = output.cpu().detach() 
-            print((idx + 1) * train_loader.batch_size)
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
