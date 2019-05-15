@@ -136,6 +136,7 @@ def generate_slow(x, model, device, dilation_depth, n_repeat, n=100, sample=Fals
     model.eval()
     dilations = [2**i for i in range(dilation_depth)] * n_repeat
     res = list(x)
+    model.to(device)
    
     for i in range(n):
         x = torch.tensor(res[-sum(dilations)-1:])
@@ -174,7 +175,7 @@ def generation(model, device, filename = None, seconds = 1, dataset = 'ljdataset
     s = fs
     
     num_to_gen = seconds * fs
-    initial_data = data_generation_sample(data, fs, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
+    initial_data = data_generation_sample(data, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
  
     gen_rst = generate_slow(initial_data[0:4000], model, device, dilation_depth=10,\
             n_repeat=model.num_blocks, n=num_to_gen, sample=False)
