@@ -245,7 +245,7 @@ if __name__ == '__main__':
         D.target_length = 16
         test_data = D.LJDataset(args.data_path, False, args.test_ratio)
         test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, collate_fn=D.collate_fn, num_workers=args.workers)
-        lss, acc = evaluate(model, optimizer, criterion, test_loader):
+        lss, acc = evaluate(model, optimizer, criterion, test_loader)
         print("loss {:.3f} acc {:.3f}".format(lss, acc))
         quit()
     elif args.dataset == 'bachtest':
