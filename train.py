@@ -22,7 +22,7 @@ parser.add_argument('--blocks', type=int, default=1, help='number of blocks of r
 parser.add_argument('--layers_per_block', type=int, default=10, help='residual layers per block')
 parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--dataset', type=str, default='ljdataset', help="The dataset to use. Can be 'ljdataset', 'bach', 'ljtest', or 'bachtest'")
+parser.add_argument('--dataset', type=str, default='ljdataset', help="The dataset to use. Can be 'ljdataset', 'VCTK', 'bach', 'ljtest', or 'bachtest'")
 parser.add_argument('--save_path', type=str, default=None, help='path to save trained model')
 parser.add_argument('--model_name', type=str, default=None, help='path name of model')
 parser.add_argument('--load_path', type=str, default=None, help='path to load saved model')

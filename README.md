@@ -1,22 +1,20 @@
-# ParallelWaveNet
+#Pytorch-WaveNet
 
-Parallel implementation of DeepMind's WaveNet utilizing PyTorch
+Pytorch implementation of DeepMind's WaveNet utilizing PyTorch
 
 by: Jacqueline Abalo and John Donaghy
 
-Dependencies:
+Dependencies: pytorch, torchvision, numpy, matplotlib, scipy
 
-pytorch, torchvision, librosa
+Dynamically built Wavenet model entirely described using command-line arguments.  Driven by train.py with model definitions in model.py and data handling in data.py.  
+Data.py houses functionality to load LJSpeech dataset and VCTK dataset.  
+Also made available is functionality to load Partita for Violin No. 2 by ohann Sebastian Bach, credit: Vincent Herrmann.
+MuLawExpanding and MuLawDecoding in transforms.py credit: Sungwon Kim
 
-enter interactive session with
-srun --mem=5gb --time=4:00:00 --gres=gpu:1 --pty -c 4 /bin/bash
 
-conda activate dis_pytorch_env
 
-conda install pytorch torchvision cudatoolkit=10.0 -c pytorch
+Basic Run Example:
 
-to launch training from log-0 node (don't launch while in interactive session)
-sbatch launch_multinode.s
+python train.py -dataset [dataset] --data_path [path/to/dataset/] --epochs [# epochs] --batch_size [# samples per batch] --use_cuda True
 
-Data Processed with preprocessing script from ksw0306 FloWaveNet.
-Data Location on prince: /scratch/jcd496/LJdata/processed
+Further usage options available via: python train.py --help 
