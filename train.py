@@ -22,13 +22,12 @@ parser.add_argument('--blocks', type=int, default=1, help='number of blocks of r
 parser.add_argument('--layers_per_block', type=int, default=10, help='residual layers per block')
 parser.add_argument('--use_cuda', type=bool, default=False, help='offload to gpu')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-parser.add_argument('--mu', type=int, default=128, help='number of epochs')
 parser.add_argument('--dataset', type=str, default='ljdataset', help="The dataset to use. Can be 'ljdataset', 'bach', 'ljtest', or 'bachtest'")
 parser.add_argument('--save_path', type=str, default=None, help='path to save trained model')
 parser.add_argument('--model_name', type=str, default=None, help='path name of model')
 parser.add_argument('--load_path', type=str, default=None, help='path to load saved model')
 parser.add_argument('--save_wav', type=str, default=None, help='path to save wav prediction')
-parser.add_argument('--speakers', type=int, default=5, help='number of speakers used in global conditioning')
+parser.add_argument('--speakers', type=int, default=1, help='number of speakers used in global conditioning')
 parser.add_argument('--test_ratio', type=float, default=0.99, help='ratio of data to use for testing. The rest is used for training.')
 parser.add_argument('--gen_len', type=int, default=1, help='number of seconds of data to generate')
 parser.add_argument('--stride', type=int, default=500, help='stride to use in bach or bachtest dataloader.')
@@ -91,7 +90,6 @@ def train(model, optimizer, dataloader, criterion, epochs, evaluate = True):
             optimizer.step()
             predictions = output.cpu().detach() 
             print((idx + 1) * train_loader.batch_size)
-        # indent from for loop to here
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
@@ -118,31 +116,27 @@ def VCTK_train(model, optimizer, criterion):
     train_data = D.VCTKDataset(args.data_path, True, 0.1)
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, collate_fn=D.vctk_collate_fn, num_workers=args.workers)
     print("Number of training inputs:", len(train_data))
-    for idx, (x, gc, target) in enumerate(train_loader):
-        break
-    target = target.view(-1) 
-    x, gc, target = x.to(device), gc.to(device), target.to(device)
+    
     for epoch in range(args.epochs):
         running_loss = 0.0
         epoch_s = monotonic()
-        #for idx, (x, gc, target) in enumerate(train_loader):
-        #    target = target.view(-1) 
-        #    x, gc, target = x.to(device), gc.to(device), target.to(device)
+        for idx, (x, gc, target) in enumerate(train_loader):
+            target = target.view(-1) 
+            x, gc, target = x.to(device), gc.to(device), target.to(device)
 
-        optimizer.zero_grad()
-        #gc = torch.tensor([[1,0,0,0,0] for i in range(5)]).float().to(device)        
-        #gc = torch.tensor([[1,0,0,0,0],[0,1,0,0,0],[0,0,1,0,0],[0,0,0,1,0],[0,0,0,0,1]]).float().to(device)        
-        output = model(x, gc)
-        loss = criterion(output.squeeze(), target.squeeze())
-        predictions = output 
-        loss.backward()
-        
-        optimizer.step()
-        running_loss+=loss.item()
+            optimizer.zero_grad()
+            output = model(x, gc)
+            loss = criterion(output.squeeze(), target.squeeze())
+            predictions = output 
+            loss.backward()
+            
+            optimizer.step()
+            running_loss+=loss.item()
         epoch_f = monotonic()
         epoch_time.update((epoch_f - epoch_s))
         losses.append(running_loss)
         print("epoch {} loss {:.3f} time {:.3f}".format(epoch, running_loss, epoch_time.average()))
+    
     predictions = predictions.cpu().detach()    
     if args.save_wav:
         values, predictions = torch.topk(predictions, 1, dim=1)
@@ -161,18 +155,13 @@ def evaluate(model, optimizer, criterion, test_loader):
     correct = 0
 
     for idx, (x, target) in enumerate(test_loader):
-        #print((idx + 1) * args.batch_size)
         target = target.view(-1)
         x, target = x.to(device), target.to(device)
         output = model(x)
         loss = criterion(output.squeeze(), target.squeeze())
         running_loss += loss.item()
         predictions = torch.max(output.cpu().detach(), 1)[1].view(-1)
-        #print("target length", model.target_length)
-        #print("predictions shape b4 view", predictions.shape)
         predictions  = predictions.view(-1)
-        #print(predictions[14748:14848])
-        #print(target[14748:14848])
         correct_pred = torch.eq(target.cpu(), predictions)
         correct += torch.sum(correct_pred).item()
 
@@ -240,7 +229,8 @@ if __name__ == '__main__':
 
     losses = None
     predictions = None 
-    mu = 256
+
+    ####args.dataset dictates action to be taken, train/test and which dataset (LJspeech, Bach, VCTK)######
     if args.dataset == 'ljtest':
         D.target_length = 16
         test_data = D.LJDataset(args.data_path, False, args.test_ratio)
@@ -297,7 +287,7 @@ if __name__ == '__main__':
 
     if args.save_path:
         save_wav = args.save_path + '/' + args.model_name
-        D.generation(mu, model, device, filename = save_wav, seconds = args.gen_len, dataset = args.dataset)
+        D.generation(model, device, filename = save_wav, seconds = args.gen_len, dataset = args.dataset)
 
         if args.dataset != 'bach':
             predictions = predict(model)

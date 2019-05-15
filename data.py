@@ -157,6 +157,38 @@ def generate_slow(x, model, device, dilation_depth, n_repeat, n=100, sample=Fals
         res.append(r)
     model.train()
     return res
+def generation(model, device, filename = None, seconds = 1, dataset = 'ljdataset'):
+    if not filename:
+        filename = 'wav'
+    print("Generating...")
+    """
+    Description : module for generation
+    """
+    if dataset == 'bach':
+        data = np.load('train_samples/bach_chaconne/dataset.npz', mmap_mode='r')['arr_0'] # already mu law encoded
+        fs = 16000
+    else:
+        fs = 22050
+        data = np.load("/scratch/jcd496/LJdata/processed/ljspeech-audio-00001.npy")
+    
+    s = fs
+    
+    num_to_gen = seconds * fs
+    initial_data = data_generation_sample(data, fs, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
+ 
+    gen_rst = generate_slow(initial_data[0:4000], model, device, dilation_depth=10,\
+            n_repeat=model.num_blocks, n=num_to_gen, sample=False)
+    gen_wav = np.array(gen_rst)
+    plt.plot(gen_wav, ',')
+    pth = filename + ".jpg"
+    print(pth)
+    plt.savefig(pth)
+    expander = transforms.MuLawExpanding()
+    gen_wav2 = expander(gen_wav).astype(np.float32)
+    pth = filename + ".wav"
+    print(pth)
+    transforms.to_wav(pth, gen_wav2, sample_rate=fs)
+    print("Generation complete.")
     
 
 
@@ -235,36 +267,4 @@ def vctk_collate_fn(batch):
     x_batch = x_batch[:,:,:-1]##
     return x_batch, speakers, target   ##c_batch
 
-def generation(mu, model, device, filename = None, seconds = 1, dataset = 'ljdataset'):
-    if not filename:
-        filename = 'wav'
-    print("Generating...")
-    """
-    Description : module for generation
-    """
-    if dataset == 'bach':
-        data = np.load('train_samples/bach_chaconne/dataset.npz', mmap_mode='r')['arr_0'] # already mu law encoded
-        fs = 16000
-    else:
-        fs = 22050
-        data = np.load("/scratch/jcd496/LJdata/processed/ljspeech-audio-00001.npy")
-    
-    s = fs
-    
-    num_to_gen = seconds * fs
-    initial_data = data_generation_sample(data, fs, mu=mu, seq_size=s, start = (6 * 60 + 1) * fs if dataset == 'bach' else fs, dataset = dataset)
- 
-    gen_rst = generate_slow(initial_data[0:4000], model, device, dilation_depth=10,\
-            n_repeat=model.num_blocks, n=num_to_gen, sample=False)
-    gen_wav = np.array(gen_rst)
-    plt.plot(gen_wav, ',')
-    pth = filename + ".jpg"
-    print(pth)
-    plt.savefig(pth)
-    expander = transforms.MuLawExpanding()
-    gen_wav2 = expander(gen_wav).astype(np.float32)
-    pth = filename + ".wav"
-    print(pth)
-    transforms.to_wav(pth, gen_wav2, sample_rate=fs)
-    print("Generation complete.")
 
